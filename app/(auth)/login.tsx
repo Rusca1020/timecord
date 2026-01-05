@@ -1,19 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { TextInput, Button, Text, Card, HelperText, Divider } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useStore } from '@/store/useStore';
-import { handleGoogleSignIn, getAuthErrorMessage } from '@/services/authService';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-
-WebBrowser.maybeCompleteAuthSession();
-
-// Google OAuth 설정 (placeholder - 실제 값으로 교체 필요)
-const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_IOS_CLIENT_ID = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -21,36 +10,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
-  const { signIn, signInWithGoogle, isLoading, authError, setAuthError } = useStore();
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-  });
-
-  // Google OAuth 응답 처리
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token, access_token } = response.params;
-      handleGoogleSignIn(id_token, access_token)
-        .then(({ user, isNewUser }) => {
-          if (isNewUser) {
-            // 새 Google 사용자 - 회원가입으로 리다이렉트
-            router.replace('/(auth)/signup?provider=google');
-          } else {
-            signInWithGoogle(user);
-          }
-        })
-        .catch((error) => {
-          if (error.message === 'NEEDS_ROLE_SELECTION') {
-            router.replace('/(auth)/signup?provider=google');
-          } else {
-            setAuthError(getAuthErrorMessage(error.code || ''));
-          }
-        });
-    }
-  }, [response]);
+  const { isLoading, setUser, setIsLoading } = useStore();
 
   const validate = (): boolean => {
     const newErrors: { email?: string; password?: string } = {};
@@ -72,15 +32,22 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!validate()) return;
 
-    try {
-      await signIn(email, password);
-    } catch (error) {
-      // 에러는 store에서 처리됨
-    }
-  };
-
-  const handleGoogleLogin = () => {
-    promptAsync();
+    setIsLoading(true);
+    // 임시 로그인 - 더미 유저 생성
+    setTimeout(() => {
+      setUser({
+        id: 'temp-user-1',
+        name: email.split('@')[0],
+        email: email,
+        role: 'child',
+        balance: 120,
+        totalEarned: 500,
+        totalSpent: 380,
+        createdAt: new Date(),
+      });
+      setIsLoading(false);
+      router.replace('/(tabs)');
+    }, 500);
   };
 
   return (
@@ -109,13 +76,6 @@ export default function LoginScreen() {
               로그인
             </Text>
 
-            {/* 에러 메시지 */}
-            {authError && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{authError}</Text>
-              </View>
-            )}
-
             {/* 이메일 입력 */}
             <TextInput
               label="이메일"
@@ -123,7 +83,6 @@ export default function LoginScreen() {
               onChangeText={(text) => {
                 setEmail(text);
                 setErrors((prev) => ({ ...prev, email: undefined }));
-                setAuthError(null);
               }}
               mode="outlined"
               keyboardType="email-address"
@@ -146,7 +105,6 @@ export default function LoginScreen() {
               onChangeText={(text) => {
                 setPassword(text);
                 setErrors((prev) => ({ ...prev, password: undefined }));
-                setAuthError(null);
               }}
               mode="outlined"
               secureTextEntry={!showPassword}
@@ -176,27 +134,6 @@ export default function LoginScreen() {
               contentStyle={styles.buttonContent}
             >
               로그인
-            </Button>
-
-            {/* 구분선 */}
-            <View style={styles.dividerContainer}>
-              <Divider style={styles.divider} />
-              <Text style={styles.dividerText}>또는</Text>
-              <Divider style={styles.divider} />
-            </View>
-
-            {/* Google 로그인 버튼 */}
-            <Button
-              mode="outlined"
-              onPress={handleGoogleLogin}
-              disabled={!request || isLoading}
-              style={styles.googleButton}
-              contentStyle={styles.buttonContent}
-              icon={({ size }) => (
-                <FontAwesome name="google" size={size} color="#DB4437" />
-              )}
-            >
-              Google로 로그인
             </Button>
 
             {/* 회원가입 링크 */}
@@ -249,16 +186,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     fontWeight: 'bold',
   },
-  errorContainer: {
-    backgroundColor: '#FEE2E2',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#DC2626',
-    textAlign: 'center',
-  },
   input: {
     marginBottom: 8,
   },
@@ -268,21 +195,6 @@ const styles = StyleSheet.create({
   },
   buttonContent: {
     paddingVertical: 8,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  divider: {
-    flex: 1,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#94A3B8',
-  },
-  googleButton: {
-    borderColor: '#E2E8F0',
   },
   signupContainer: {
     flexDirection: 'row',

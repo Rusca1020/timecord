@@ -1,14 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Activity, SignupFormData } from '@/types';
-import {
-  signUpWithEmail,
-  signInWithEmail,
-  logoutUser,
-  getUserDocument,
-  getAuthErrorMessage
-} from '@/services/authService';
 
 interface AppState {
   // 사용자 상태
@@ -57,9 +48,7 @@ const initialState = {
   pendingApprovals: [],
 };
 
-export const useStore = create<AppState>()(
-  persist(
-    (set, get) => ({
+export const useStore = create<AppState>()((set, get) => ({
       ...initialState,
 
       setUser: (user) => set({
@@ -73,30 +62,37 @@ export const useStore = create<AppState>()(
 
       setAuthError: (authError) => set({ authError, isLoading: false }),
 
-      // 회원가입
+      // 회원가입 (로컬)
       signUp: async (formData: SignupFormData) => {
         set({ isLoading: true, authError: null });
-        try {
-          const user = await signUpWithEmail(formData);
-          set({ user, isAuthenticated: true, isLoading: false });
-        } catch (error: any) {
-          const errorMessage = getAuthErrorMessage(error.code || '');
-          set({ authError: errorMessage, isLoading: false });
-          throw error;
-        }
+        const user: User = {
+          id: 'user-' + Date.now(),
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          balance: 0,
+          totalEarned: 0,
+          totalSpent: 0,
+          createdAt: new Date(),
+        };
+        set({ user, isAuthenticated: true, isLoading: false });
       },
 
-      // 로그인
+      // 로그인 (로컬)
       signIn: async (email: string, password: string) => {
         set({ isLoading: true, authError: null });
-        try {
-          const user = await signInWithEmail(email, password);
-          set({ user, isAuthenticated: true, isLoading: false });
-        } catch (error: any) {
-          const errorMessage = getAuthErrorMessage(error.code || '');
-          set({ authError: errorMessage, isLoading: false });
-          throw error;
-        }
+        // 임시 로그인 - 항상 성공
+        const user: User = {
+          id: 'user-' + Date.now(),
+          name: email.split('@')[0],
+          email: email,
+          role: 'child',
+          balance: 120,
+          totalEarned: 500,
+          totalSpent: 380,
+          createdAt: new Date(),
+        };
+        set({ user, isAuthenticated: true, isLoading: false });
       },
 
       // Google 로그인 (외부에서 처리 후 호출)
@@ -104,30 +100,14 @@ export const useStore = create<AppState>()(
         set({ user, isAuthenticated: true, isLoading: false, authError: null });
       },
 
-      // Firebase auth 상태 변경 시 초기화
+      // 초기화 (로컬)
       initializeAuth: async (uid: string) => {
-        set({ isLoading: true });
-        try {
-          const user = await getUserDocument(uid);
-          if (user) {
-            set({ user, isAuthenticated: true, isLoading: false });
-          } else {
-            set({ isLoading: false });
-          }
-        } catch (error) {
-          set({ isLoading: false });
-        }
+        set({ isLoading: false });
       },
 
       // 로그아웃
       logout: async () => {
-        set({ isLoading: true });
-        try {
-          await logoutUser();
-          set({ ...initialState, isLoading: false });
-        } catch (error: any) {
-          set({ authError: error.message, isLoading: false });
-        }
+        set({ ...initialState, isLoading: false });
       },
 
       // 활동 관련 액션들
@@ -176,17 +156,7 @@ export const useStore = create<AppState>()(
           });
         }
       },
-    }),
-    {
-      name: 'timecord-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
-);
+}));
 
 // 오늘 번 시간 계산
 export const useTodayEarned = () => {

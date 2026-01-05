@@ -7,7 +7,7 @@ import { LogBox, View, ActivityIndicator } from 'react-native';
 import 'react-native-reanimated';
 import { PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
-import { subscribeToAuthChanges } from '@/services/authService';
+// import { subscribeToAuthChanges } from '@/services/authService';
 
 // react-native-paper 라이브러리 내부 경고 숨기기
 LogBox.ignoreLogs([
@@ -87,19 +87,23 @@ export default function RootLayout() {
     setUser
   } = useStore();
 
-  // Firebase auth 상태 변경 구독
+  // Firebase 임시 비활성화 - 바로 로딩 완료 처리
   useEffect(() => {
-    const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
-      if (firebaseUser) {
-        await initializeAuth(firebaseUser.uid);
-      } else {
-        setUser(null);
-        setIsLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
+    setIsLoading(false);
   }, []);
+
+  // Firebase auth 상태 변경 구독 (비활성화)
+  // useEffect(() => {
+  //   const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
+  //     if (firebaseUser) {
+  //       await initializeAuth(firebaseUser.uid);
+  //     } else {
+  //       setUser(null);
+  //       setIsLoading(false);
+  //     }
+  //   });
+  //   return () => unsubscribe();
+  // }, []);
 
   // 폰트 로딩 에러 처리
   useEffect(() => {
