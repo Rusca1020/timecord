@@ -92,3 +92,20 @@ export interface DailySummary {
   finalBalance: number;     // 최종 잔액
   activities: Activity[];
 }
+
+// 인증 관련 타입
+export type AuthProvider = 'email' | 'google';
+
+// 회원가입 폼 데이터
+export interface SignupFormData {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
+// 로그인 폼 데이터
+export interface LoginFormData {
+  email: string;
+  password: string;
+}
