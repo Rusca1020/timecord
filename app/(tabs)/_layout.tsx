@@ -1,6 +1,7 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
+import { useStore } from '@/store/useStore';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
@@ -10,6 +11,9 @@ function TabBarIcon(props: {
 }
 
 export default function TabLayout() {
+  const user = useStore((state) => state.user);
+  const isParent = user?.role === 'parent';
+
   return (
     <Tabs
       screenOptions={{
@@ -39,11 +43,22 @@ export default function TabLayout() {
           headerTitle: 'Timecord',
         }}
       />
+      {/* 자녀 전용: 기록 탭 */}
       <Tabs.Screen
         name="record"
         options={{
           title: '기록',
           tabBarIcon: ({ color }) => <TabBarIcon name="plus-circle" color={color} />,
+          href: isParent ? null : '/record',
+        }}
+      />
+      {/* 부모 전용: 승인 탭 */}
+      <Tabs.Screen
+        name="approve"
+        options={{
+          title: '승인',
+          tabBarIcon: ({ color }) => <TabBarIcon name="check-circle" color={color} />,
+          href: isParent ? '/approve' : null,
         }}
       />
       <Tabs.Screen
