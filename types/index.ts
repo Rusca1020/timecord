@@ -35,6 +35,13 @@ export type NeutralCategory =
 // 승인 필요 여부
 export type ApproverType = 'mom' | 'dad' | null;
 
+// 자녀 정보 (부모가 저장) - 기본 정보만 저장, 잔액 등은 DB에서 실시간 조회 필요
+export interface ChildInfo {
+  id: string;
+  name: string;
+  email: string;
+}
+
 // 사용자 데이터
 export interface User {
   id: string;
@@ -42,7 +49,7 @@ export interface User {
   email: string;
   role: UserRole;
   parentId?: string;        // 자녀인 경우 연결된 부모 ID
-  childrenIds?: string[];   // 부모인 경우 연결된 자녀 ID 목록
+  children?: ChildInfo[];   // 부모인 경우 자녀 정보 목록
   balance: number;          // 현재 잔액 (시간)
   totalEarned: number;      // 총 번 시간
   totalSpent: number;       // 총 쓴 시간
@@ -53,6 +60,7 @@ export interface User {
 export interface Activity {
   id: string;
   userId: string;
+  userName?: string;        // 사용자 이름 (부모 내역 조회용)
   date: string;             // YYYY-MM-DD 형식
   type: ActivityType;
   category: EarnCategory | SpendCategory | PenaltyCategory | NeutralCategory;
@@ -91,6 +99,23 @@ export interface DailySummary {
   penaltyTime: number;      // 벌금
   finalBalance: number;     // 최종 잔액
   activities: Activity[];
+}
+
+// 알림 타입
+export type NotificationType = 'approval_request' | 'approved' | 'rejected';
+
+// 알림
+export interface AppNotification {
+  id: string;
+  recipientId: string;
+  senderId: string;
+  senderName?: string;
+  type: NotificationType;
+  activityId?: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: Date;
 }
 
 // 인증 관련 타입

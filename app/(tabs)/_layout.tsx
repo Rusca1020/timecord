@@ -13,6 +13,7 @@ function TabBarIcon(props: {
 export default function TabLayout() {
   const user = useStore((state) => state.user);
   const isParent = user?.role === 'parent';
+  const unreadNotificationCount = useStore((state) => state.unreadNotificationCount);
 
   return (
     <Tabs
@@ -69,10 +70,27 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          title: '알림',
+          tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
+          tabBarBadge: unreadNotificationCount > 0 ? unreadNotificationCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#EF4444', fontSize: 10 },
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: '설정',
           tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
+        }}
+      />
+      {/* 숨겨진 화면: 자녀 추가 */}
+      <Tabs.Screen
+        name="add-child"
+        options={{
+          title: '자녀 추가',
+          href: null,
         }}
       />
     </Tabs>

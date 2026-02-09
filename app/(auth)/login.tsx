@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, Button, Text, Card, HelperText, Divider } from 'react-native-paper';
+import { TextInput, Button, Text, Card, HelperText } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useStore } from '@/store/useStore';
 
@@ -10,7 +10,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
-  const { isLoading, setUser, setIsLoading } = useStore();
+  const { isLoading, authError, signIn } = useStore();
 
   const validate = (): boolean => {
     const newErrors: { email?: string; password?: string } = {};
@@ -32,22 +32,8 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!validate()) return;
 
-    setIsLoading(true);
-    // 임시 로그인 - 더미 유저 생성
-    setTimeout(() => {
-      setUser({
-        id: 'temp-user-1',
-        name: email.split('@')[0],
-        email: email,
-        role: 'child',
-        balance: 120,
-        totalEarned: 500,
-        totalSpent: 380,
-        createdAt: new Date(),
-      });
-      setIsLoading(false);
-      router.replace('/(tabs)');
-    }, 500);
+    await signIn(email, password);
+    // 로그인 성공 시 _layout.tsx의 useProtectedRoute에서 자동으로 리다이렉트됨
   };
 
   return (
@@ -75,6 +61,13 @@ export default function LoginScreen() {
             <Text variant="titleLarge" style={styles.cardTitle}>
               로그인
             </Text>
+
+            {/* 에러 메시지 표시 */}
+            {authError && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{authError}</Text>
+              </View>
+            )}
 
             {/* 이메일 입력 */}
             <TextInput
@@ -185,6 +178,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     fontWeight: 'bold',
+  },
+  errorContainer: {
+    backgroundColor: '#FEE2E2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#DC2626',
+    textAlign: 'center',
   },
   input: {
     marginBottom: 8,

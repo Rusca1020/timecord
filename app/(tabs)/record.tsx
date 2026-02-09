@@ -1,23 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, Alert } from 'react-native';
 import { Card, Text, Button, TextInput, SegmentedButtons, Chip, Portal, Dialog } from 'react-native-paper';
+import { useLocalSearchParams } from 'expo-router';
 import { useStore } from '@/store/useStore';
 import { EARN_ACTIVITIES, SPEND_ACTIVITIES, NEUTRAL_ACTIVITIES } from '@/constants/activities';
 import { EarnCategory, SpendCategory, NeutralCategory, Activity } from '@/types';
 
 type RecordType = 'earn' | 'spend' | 'neutral';
 
+// 시간 문자열(HH:MM)을 분으로 변환
+const timeToMinutes = (time: string): number | null => {
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+};
+
+// 시작/종료 시간으로 duration(시간) 계산
+const calculateDurationFromTimes = (start: string, end: string): number | null => {
+  const startMinutes = timeToMinutes(start);
+  const endMinutes = timeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return null;
+
+  let diff = endMinutes - startMinutes;
+  // 자정을 넘기는 경우 처리 (예: 23:00 ~ 01:00)
+  if (diff < 0) diff += 24 * 60;
+
+  return diff / 60; // 시간 단위로 반환
+};
+
 export default function RecordScreen() {
-  const [recordType, setRecordType] = useState<RecordType>('earn');
+  const { type } = useLocalSearchParams<{ type?: string }>();
+  const [recordType, setRecordType] = useState<RecordType>((type as RecordType) || 'earn');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [duration, setDuration] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [startTimeError, setStartTimeError] = useState('');
+  const [endTimeError, setEndTimeError] = useState('');
   const [description, setDescription] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isAutoCalculated, setIsAutoCalculated] = useState(false);
 
+  // URL 파라미터로 탭 전환
+  useEffect(() => {
+    if (type === 'earn' || type === 'spend' || type === 'neutral') {
+      setRecordType(type);
+      setSelectedCategory(null);
+    }
+  }, [type]);
+
+  // 시작/종료 시간이 변경되면 duration 자동 계산
+  useEffect(() => {
+    if (startTime && endTime) {
+      const calculated = calculateDurationFromTimes(startTime, endTime);
+      if (calculated !== null && calculated > 0) {
+        setDuration(calculated.toFixed(1));
+        setIsAutoCalculated(true);
+      }
+    } else {
+      setIsAutoCalculated(false);
+    }
+  }, [startTime, endTime]);
+
+  const user = useStore((state) => state.user);
   const addActivity = useStore((state) => state.addActivity);
-  const updateBalance = useStore((state) => state.updateBalance);
 
   const earnCategories = Object.entries(EARN_ACTIVITIES);
   const spendCategories = Object.entries(SPEND_ACTIVITIES);
@@ -48,23 +97,31 @@ export default function RecordScreen() {
       Alert.alert('알림', '활동을 선택해주세요.');
       return;
     }
-    if (recordType !== 'neutral' && !duration && !getSelectedActivity()?.fixedHours) {
+    if (recordType !== 'neutral' && !duration && !(recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.fixedHours)) {
       Alert.alert('알림', '시간을 입력해주세요.');
       return;
     }
     setShowConfirm(true);
   };
 
-  const confirmSubmit = () => {
+  const confirmSubmit = async () => {
     const activity = getSelectedActivity();
     if (!activity) return;
 
     const now = new Date();
-    const earnedTime = recordType === 'earn' ? calculateEarnedTime() : parseFloat(duration || '0');
+    const earnedTime = recordType === 'earn'
+      ? calculateEarnedTime()
+      : recordType === 'spend'
+        ? -parseFloat(duration || '0')  // spend는 음수 (시간 소비)
+        : 0;  // neutral은 0 (시간 영향 없음)
 
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      userId: 'demo-user',
+    const requiresApproval = recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.requiresApproval;
+    const approved = recordType === 'earn' ? !requiresApproval : true;
+
+    // id와 createdAt은 DB에서 자동 생성
+    const newActivity = {
+      userId: user?.id || '',
+      userName: user?.name || '',
       date: now.toISOString().split('T')[0],
       type: recordType,
       category: selectedCategory as EarnCategory | SpendCategory | NeutralCategory,
@@ -74,31 +131,46 @@ export default function RecordScreen() {
       startTime: startTime || undefined,
       endTime: endTime || undefined,
       description: description || undefined,
-      requiresApproval: recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.requiresApproval,
+      requiresApproval: requiresApproval || false,
       approverType: recordType === 'earn' ? EARN_ACTIVITIES[selectedCategory as EarnCategory]?.approverType : null,
-      approved: recordType === 'earn' ? !EARN_ACTIVITIES[selectedCategory as EarnCategory]?.requiresApproval : true,
-      createdAt: now,
+      approved: approved,
     };
 
-    addActivity(newActivity);
-
-    // 잔액 업데이트 (승인이 필요 없는 경우만)
-    if (newActivity.approved) {
-      if (recordType === 'earn') {
-        updateBalance(earnedTime);
-      } else if (recordType === 'spend') {
-        updateBalance(-parseFloat(duration || '0'));
-      }
-    }
+    const success = await addActivity(newActivity);
 
     setShowConfirm(false);
-    resetForm();
-    Alert.alert(
-      '완료',
-      newActivity.requiresApproval
-        ? '기록이 저장되었습니다. 부모님 승인 후 시간이 반영됩니다.'
-        : '기록이 저장되었습니다!'
-    );
+    if (success) {
+      resetForm();
+      Alert.alert(
+        '완료',
+        requiresApproval
+          ? '기록이 저장되었습니다. 부모님 승인 후 시간이 반영됩니다.'
+          : '기록이 저장되었습니다!'
+      );
+    } else {
+      Alert.alert('오류', '기록 저장에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  const validateTimeInput = (value: string): string => {
+    if (!value) return '';
+    // 입력 중에는 부분 입력 허용
+    if (/^\d{0,2}:?\d{0,2}$/.test(value)) return '';
+    // 완성된 입력이면 형식 확인
+    if (value.includes(':') && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(value)) {
+      return 'HH:MM 형식으로 입력하세요 (예: 14:00)';
+    }
+    return '';
+  };
+
+  const handleStartTimeChange = (value: string) => {
+    setStartTime(value);
+    setStartTimeError(validateTimeInput(value));
+  };
+
+  const handleEndTimeChange = (value: string) => {
+    setEndTime(value);
+    setEndTimeError(validateTimeInput(value));
   };
 
   const resetForm = () => {
@@ -106,6 +178,8 @@ export default function RecordScreen() {
     setDuration('');
     setStartTime('');
     setEndTime('');
+    setStartTimeError('');
+    setEndTimeError('');
     setDescription('');
   };
 
@@ -198,39 +272,65 @@ export default function RecordScreen() {
       )}
 
       {/* 시간 입력 */}
-      {recordType !== 'neutral' && !getSelectedActivity()?.fixedHours && (
+      {recordType !== 'neutral' && !(recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.fixedHours) && (
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              시간 입력
+              시간대 입력
             </Text>
-            <TextInput
-              mode="outlined"
-              label="시간 (예: 1.5)"
-              value={duration}
-              onChangeText={setDuration}
-              keyboardType="decimal-pad"
-              right={<TextInput.Affix text="시간" />}
-              style={styles.input}
-            />
+            <Text variant="bodySmall" style={styles.timeHint}>
+              시작/종료 시간을 입력하면 자동으로 계산됩니다
+            </Text>
             <View style={styles.timeRow}>
               <TextInput
                 mode="outlined"
                 label="시작 시간"
                 value={startTime}
-                onChangeText={setStartTime}
-                placeholder="15:00"
+                onChangeText={handleStartTimeChange}
+                placeholder="14:00"
                 style={styles.timeInput}
+                error={!!startTimeError}
               />
               <Text style={styles.timeSeparator}>~</Text>
               <TextInput
                 mode="outlined"
                 label="종료 시간"
                 value={endTime}
-                onChangeText={setEndTime}
-                placeholder="18:00"
+                onChangeText={handleEndTimeChange}
+                placeholder="16:00"
                 style={styles.timeInput}
+                error={!!endTimeError}
               />
+            </View>
+            {(startTimeError || endTimeError) && (
+              <Text style={styles.timeError}>
+                {startTimeError || endTimeError}
+              </Text>
+            )}
+            <View style={styles.durationRow}>
+              <TextInput
+                mode="outlined"
+                label={isAutoCalculated ? "자동 계산됨" : "시간 직접 입력"}
+                value={duration}
+                onChangeText={(text) => {
+                  setDuration(text);
+                  setIsAutoCalculated(false);
+                }}
+                keyboardType="decimal-pad"
+                right={<TextInput.Affix text="시간" />}
+                style={styles.durationInput}
+                disabled={isAutoCalculated}
+              />
+              {isAutoCalculated && (
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => setIsAutoCalculated(false)}
+                  style={styles.editButton}
+                >
+                  수정
+                </Button>
+              )}
             </View>
           </Card.Content>
         </Card>
@@ -375,6 +475,27 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     fontSize: 20,
     color: '#64748B',
+  },
+  timeHint: {
+    color: '#94A3B8',
+    marginBottom: 12,
+  },
+  timeError: {
+    color: '#DC2626',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  durationInput: {
+    flex: 1,
+  },
+  editButton: {
+    marginLeft: 8,
   },
   resultCard: {
     marginHorizontal: 16,

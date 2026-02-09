@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
-import { Card, Text, Button, Chip, Surface } from 'react-native-paper';
+import { Card, Text, Button, Chip, Surface, Portal, Dialog } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
 import { Activity } from '@/types';
 
@@ -17,77 +17,69 @@ const categoryNames: Record<string, string> = {
   app_store: '앱스토어 등록',
 };
 
-// 더미 승인 대기 데이터
-const dummyPendingActivities: Activity[] = [
-  {
-    id: '1',
-    userId: 'child-1',
-    date: new Date().toISOString().split('T')[0],
-    type: 'earn',
-    category: 'self_study',
-    duration: 2,
-    multiplier: 1.5,
-    earnedTime: 3,
-    startTime: '14:00',
-    endTime: '16:00',
-    description: '수학 문제집 풀기',
-    requiresApproval: true,
-    approverType: 'mom',
-    approved: false,
-    createdAt: new Date(),
-  },
-  {
-    id: '2',
-    userId: 'child-1',
-    date: new Date().toISOString().split('T')[0],
-    type: 'earn',
-    category: 'coding',
-    duration: 1,
-    multiplier: 2,
-    earnedTime: 2,
-    startTime: '17:00',
-    endTime: '18:00',
-    description: 'React Native 공부',
-    requiresApproval: true,
-    approverType: 'dad',
-    approved: false,
-    createdAt: new Date(),
-  },
-  {
-    id: '3',
-    userId: 'child-1',
-    date: new Date().toISOString().split('T')[0],
-    type: 'earn',
-    category: 'reading',
-    duration: 1,
-    multiplier: 1.5,
-    earnedTime: 1.5,
-    description: '해리포터 읽고 독후감 작성',
-    requiresApproval: true,
-    approverType: 'mom',
-    approved: false,
-    createdAt: new Date(),
-  },
-];
 
 export default function ApproveScreen() {
   const user = useStore((state) => state.user);
   const pendingApprovals = useStore((state) => state.pendingApprovals);
-  const updateActivity = useStore((state) => state.updateActivity);
+  const approveActivity = useStore((state) => state.approveActivity);
+  const rejectActivity = useStore((state) => state.rejectActivity);
 
-  // 더미 데이터 사용 (실제로는 pendingApprovals 사용)
-  const activities = pendingApprovals.length > 0 ? pendingApprovals : dummyPendingActivities;
+  // 중복 클릭 방지를 위한 처리 중인 활동 ID 추적
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  // 거절 확인 다이얼로그
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
 
-  const handleApprove = (activityId: string) => {
-    updateActivity(activityId, {
-      approved: true,
-      approvedBy: user?.id,
-      approvedAt: new Date(),
-    });
+  const activities = pendingApprovals;
+
+  const handleApprove = async (activityId: string) => {
+    // 이미 처리 중이면 무시
+    if (processingIds.has(activityId)) return;
+
+    const activity = activities.find(a => a.id === activityId);
+    if (!activity) return;
+
+    // 처리 시작
+    setProcessingIds(prev => new Set(prev).add(activityId));
+
+    try {
+      // 활동 승인 처리 (Supabase에 저장)
+      await approveActivity(activityId);
+    } finally {
+      // 처리 완료
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(activityId);
+        return next;
+      });
+    }
   };
 
   const handleReject = (activityId: string) => {
-    // 거절 시 활동 삭제 또는 상태 변경
+    setRejectTargetId(activityId);
+  };
+
+  const confirmReject = async () => {
+    if (!rejectTargetId) return;
+    const activityId = rejectTargetId;
+    setRejectTargetId(null);
+
+    // 이미 처리 중이면 무시
+    if (processingIds.has(activityId)) return;
+
+    // 처리 시작
+    setProcessingIds(prev => new Set(prev).add(activityId));
+
+    try {
+      // 거절 시 알림 + 활동 삭제
+      await rejectActivity(activityId);
+    } finally {
+      // 처리 완료
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(activityId);
+        return next;
+      });
+    }
   };
 
   const formatTime = (start?: string, end?: string) => {
@@ -162,6 +154,8 @@ export default function ApproveScreen() {
                     onPress={() => handleReject(activity.id)}
                     style={styles.rejectButton}
                     textColor="#EF4444"
+                    disabled={processingIds.has(activity.id)}
+                    loading={processingIds.has(activity.id)}
                   >
                     거절
                   </Button>
@@ -170,6 +164,8 @@ export default function ApproveScreen() {
                     onPress={() => handleApprove(activity.id)}
                     style={styles.approveButton}
                     buttonColor="#10B981"
+                    disabled={processingIds.has(activity.id)}
+                    loading={processingIds.has(activity.id)}
                   >
                     승인
                   </Button>
@@ -178,6 +174,20 @@ export default function ApproveScreen() {
             </Card>
           ))
       )}
+
+      {/* 거절 확인 다이얼로그 */}
+      <Portal>
+        <Dialog visible={rejectTargetId !== null} onDismiss={() => setRejectTargetId(null)}>
+          <Dialog.Title>거절 확인</Dialog.Title>
+          <Dialog.Content>
+            <Text>이 활동을 거절하시겠습니까? 거절하면 삭제됩니다.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setRejectTargetId(null)}>취소</Button>
+            <Button onPress={confirmReject} textColor="#DC2626">거절</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }

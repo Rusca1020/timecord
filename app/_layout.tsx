@@ -7,7 +7,9 @@ import { LogBox, View, ActivityIndicator } from 'react-native';
 import 'react-native-reanimated';
 import { PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
-// import { subscribeToAuthChanges } from '@/services/authService';
+import { onAuthStateChange } from '@/services/authService';
+import { configureNotifications, registerPushToken } from '@/services/pushService';
+import { subscribeToNotifications } from '@/services/notificationService';
 
 // react-native-paper 라이브러리 내부 경고 숨기기
 LogBox.ignoreLogs([
@@ -82,28 +84,50 @@ export default function RootLayout() {
   const {
     isAuthenticated,
     isLoading,
+    user,
+    setUser,
     setIsLoading,
     initializeAuth,
-    setUser
+    addNotification,
   } = useStore();
 
-  // Firebase 임시 비활성화 - 바로 로딩 완료 처리
+  // 푸시 알림 핸들러 설정
   useEffect(() => {
-    setIsLoading(false);
+    configureNotifications();
   }, []);
 
-  // Firebase auth 상태 변경 구독 (비활성화)
-  // useEffect(() => {
-  //   const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
-  //     if (firebaseUser) {
-  //       await initializeAuth(firebaseUser.uid);
-  //     } else {
-  //       setUser(null);
-  //       setIsLoading(false);
-  //     }
-  //   });
-  //   return () => unsubscribe();
-  // }, []);
+  // Supabase 인증 상태 초기화 및 구독
+  useEffect(() => {
+    // 초기 세션 복원
+    initializeAuth();
+
+    // 인증 상태 변경 구독
+    const unsubscribe = onAuthStateChange((event, authUser) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setUser(authUser);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 인증 후 푸시 토큰 등록 + 실시간 알림 구독
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    // 푸시 토큰 등록
+    registerPushToken(user.id);
+
+    // 실시간 알림 구독
+    const unsubscribe = subscribeToNotifications(user.id, (notification) => {
+      useStore.getState().addNotification(notification);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthenticated, user?.id]);
 
   // 폰트 로딩 에러 처리
   useEffect(() => {

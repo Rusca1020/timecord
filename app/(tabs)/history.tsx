@@ -1,102 +1,18 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, FlatList } from 'react-native';
-import { Card, Text, Chip, Surface, SegmentedButtons } from 'react-native-paper';
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, View, ScrollView } from 'react-native';
+import { Text, Chip, Surface, SegmentedButtons, Searchbar } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
 import { EARN_ACTIVITIES, SPEND_ACTIVITIES, PENALTY_ACTIVITIES, NEUTRAL_ACTIVITIES } from '@/constants/activities';
 import { Activity, EarnCategory, SpendCategory, PenaltyCategory, NeutralCategory } from '@/types';
 
 type FilterType = 'all' | 'earn' | 'spend' | 'penalty';
 
-// 데모 데이터
-const DEMO_ACTIVITIES: Activity[] = [
-  {
-    id: '1',
-    userId: 'demo',
-    date: new Date().toISOString().split('T')[0],
-    type: 'earn',
-    category: 'academy_study',
-    duration: 3,
-    multiplier: 1,
-    earnedTime: 3,
-    startTime: '15:00',
-    endTime: '18:00',
-    description: '수학 학원',
-    requiresApproval: false,
-    approved: true,
-    createdAt: new Date(),
-  },
-  {
-    id: '2',
-    userId: 'demo',
-    date: new Date().toISOString().split('T')[0],
-    type: 'earn',
-    category: 'academy_homework',
-    duration: 2,
-    multiplier: 1,
-    earnedTime: 2,
-    startTime: '19:00',
-    endTime: '21:00',
-    description: '수학 숙제',
-    requiresApproval: false,
-    approved: true,
-    createdAt: new Date(),
-  },
-  {
-    id: '3',
-    userId: 'demo',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    type: 'spend',
-    category: 'game',
-    duration: 1.5,
-    multiplier: 1,
-    earnedTime: 1.5,
-    description: '마인크래프트',
-    requiresApproval: false,
-    approved: true,
-    createdAt: new Date(Date.now() - 86400000),
-  },
-  {
-    id: '4',
-    userId: 'demo',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    type: 'earn',
-    category: 'coding',
-    duration: 2,
-    multiplier: 2,
-    earnedTime: 4,
-    startTime: '14:00',
-    endTime: '16:00',
-    description: 'Python 공부',
-    requiresApproval: true,
-    approverType: 'dad',
-    approved: true,
-    createdAt: new Date(Date.now() - 86400000),
-  },
-];
-
 export default function HistoryScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const activities = useStore((state) => state.activities);
-
-  // 데모용으로 활동이 없으면 데모 데이터 사용
-  const displayActivities = activities.length > 0 ? activities : DEMO_ACTIVITIES;
-
-  const filteredActivities = displayActivities.filter((activity) => {
-    if (filter === 'all') return true;
-    return activity.type === filter;
-  });
-
-  // 날짜별로 그룹화
-  const groupedActivities = filteredActivities.reduce((groups, activity) => {
-    const date = activity.date;
-    if (!groups[date]) {
-      groups[date] = [];
-    }
-    groups[date].push(activity);
-    return groups;
-  }, {} as Record<string, Activity[]>);
-
-  const sortedDates = Object.keys(groupedActivities).sort((a, b) => b.localeCompare(a));
+  const user = useStore((state) => state.user);
+  const isParent = user?.role === 'parent';
 
   const getActivityLabel = (activity: Activity) => {
     if (activity.type === 'earn') {
@@ -109,6 +25,39 @@ export default function HistoryScreen() {
       return NEUTRAL_ACTIVITIES[activity.category as NeutralCategory]?.label || activity.category;
     }
   };
+
+  const filteredActivities = useMemo(() => {
+    return activities.filter((activity) => {
+      // 타입 필터
+      if (filter !== 'all' && activity.type !== filter) return false;
+
+      // 검색 필터
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const label = getActivityLabel(activity).toLowerCase();
+        const userName = (activity.userName || '').toLowerCase();
+        const description = (activity.description || '').toLowerCase();
+
+        return label.includes(query) ||
+               userName.includes(query) ||
+               description.includes(query);
+      }
+
+      return true;
+    });
+  }, [activities, filter, searchQuery]);
+
+  // 날짜별로 그룹화
+  const groupedActivities = filteredActivities.reduce((groups, activity) => {
+    const date = activity.date;
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(activity);
+    return groups;
+  }, {} as Record<string, Activity[]>);
+
+  const sortedDates = Object.keys(groupedActivities).sort((a, b) => b.localeCompare(a));
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -148,6 +97,11 @@ export default function HistoryScreen() {
           </Text>
         </View>
         <View style={styles.activityDetails}>
+          {isParent && activity.userName && (
+            <Text variant="bodySmall" style={styles.userNameText}>
+              {activity.userName}
+            </Text>
+          )}
           {activity.startTime && activity.endTime && (
             <Text variant="bodySmall" style={styles.timeText}>
               {activity.startTime} - {activity.endTime}
@@ -181,6 +135,14 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
+      {/* 검색 */}
+      <Searchbar
+        placeholder={isParent ? "이름, 활동, 메모 검색" : "활동, 메모 검색"}
+        onChangeText={setSearchQuery}
+        value={searchQuery}
+        style={styles.searchBar}
+      />
+
       {/* 필터 */}
       <SegmentedButtons
         value={filter}
@@ -196,21 +158,62 @@ export default function HistoryScreen() {
 
       {/* 활동 목록 */}
       <ScrollView style={styles.listContainer}>
-        {sortedDates.map((date) => (
-          <View key={date} style={styles.dateGroup}>
-            <View style={styles.dateHeader}>
-              <Text variant="titleMedium" style={styles.dateText}>
-                {formatDate(date)}
-                {isToday(date) && <Text style={styles.todayBadge}> 오늘</Text>}
-              </Text>
-              <Text variant="bodySmall" style={styles.summaryText}>
-                {groupedActivities[date].filter(a => a.type === 'earn' && a.approved).reduce((sum, a) => sum + a.earnedTime, 0).toFixed(1)}시간 벌기 /
-                {groupedActivities[date].filter(a => a.type === 'spend').reduce((sum, a) => sum + a.earnedTime, 0).toFixed(1)}시간 쓰기
-              </Text>
+        {sortedDates.map((date) => {
+          const dateActivities = groupedActivities[date];
+
+          if (isParent) {
+            // 부모: 자녀별로 분리
+            const byChild: Record<string, { name: string; activities: Activity[] }> = {};
+            dateActivities.forEach(a => {
+              const key = a.userId;
+              if (!byChild[key]) byChild[key] = { name: a.userName || '알 수 없음', activities: [] };
+              byChild[key].activities.push(a);
+            });
+
+            return (
+              <View key={date} style={styles.dateGroup}>
+                <View style={styles.dateHeader}>
+                  <Text variant="titleMedium" style={styles.dateText}>
+                    {formatDate(date)}
+                    {isToday(date) && <Text style={styles.todayBadge}> 오늘</Text>}
+                  </Text>
+                </View>
+                {Object.entries(byChild).map(([childId, { name, activities: childActs }]) => {
+                  const earned = childActs.filter(a => a.type === 'earn' && a.approved).reduce((s, a) => s + a.earnedTime, 0);
+                  const spent = childActs.filter(a => a.type === 'spend').reduce((s, a) => s + a.duration, 0);
+                  return (
+                    <View key={childId} style={styles.childGroup}>
+                      <View style={styles.childGroupHeader}>
+                        <Text variant="bodyMedium" style={styles.childGroupName}>{name}</Text>
+                        <Text variant="bodySmall" style={styles.summaryText}>
+                          {earned.toFixed(1)}시간 벌기 / {spent.toFixed(1)}시간 쓰기
+                        </Text>
+                      </View>
+                      {childActs.map(renderActivityItem)}
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          }
+
+          // 자녀: 기존 방식
+          return (
+            <View key={date} style={styles.dateGroup}>
+              <View style={styles.dateHeader}>
+                <Text variant="titleMedium" style={styles.dateText}>
+                  {formatDate(date)}
+                  {isToday(date) && <Text style={styles.todayBadge}> 오늘</Text>}
+                </Text>
+                <Text variant="bodySmall" style={styles.summaryText}>
+                  {dateActivities.filter(a => a.type === 'earn' && a.approved).reduce((sum, a) => sum + a.earnedTime, 0).toFixed(1)}시간 벌기 /
+                  {dateActivities.filter(a => a.type === 'spend').reduce((sum, a) => sum + a.duration, 0).toFixed(1)}시간 쓰기
+                </Text>
+              </View>
+              {dateActivities.map(renderActivityItem)}
             </View>
-            {groupedActivities[date].map(renderActivityItem)}
-          </View>
-        ))}
+          );
+        })}
         {sortedDates.length === 0 && (
           <View style={styles.emptyContainer}>
             <Text variant="bodyLarge" style={styles.emptyText}>
@@ -228,8 +231,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  searchBar: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    elevation: 1,
+  },
   filter: {
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   listContainer: {
     flex: 1,
@@ -287,6 +298,11 @@ const styles = StyleSheet.create({
   activityDetails: {
     marginBottom: 8,
   },
+  userNameText: {
+    color: '#6366F1',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
   timeText: {
     color: '#64748B',
   },
@@ -321,5 +337,20 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: '#94A3B8',
+  },
+  childGroup: {
+    marginBottom: 8,
+  },
+  childGroupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  childGroupName: {
+    fontWeight: '600',
+    color: '#6366F1',
   },
 });

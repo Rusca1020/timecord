@@ -1,8 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView } from 'react-native';
+import { StyleSheet, View, ScrollView, Alert, Platform } from 'react-native';
 import { Card, Text, Button, Surface, Avatar } from 'react-native-paper';
 import { router } from 'expo-router';
-import { useStore, useTodayEarned, useTodaySpent, useTodayPenalty } from '@/store/useStore';
+import { useStore, useTodayEarned, useTodaySpent, useTodayPenalty, useComputedBalance } from '@/store/useStore';
 
 // 자녀 홈 화면
 function ChildHomeScreen() {
@@ -11,7 +11,7 @@ function ChildHomeScreen() {
   const todaySpent = useTodaySpent();
   const todayPenalty = useTodayPenalty();
 
-  const balance = user?.balance ?? 5.5;
+  const balance = useComputedBalance();
   const today = new Date();
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const isHoliday = today.getDay() === 0 || today.getDay() === 6;
@@ -76,7 +76,7 @@ function ChildHomeScreen() {
           style={[styles.actionButton, { backgroundColor: '#10B981' }]}
           contentStyle={styles.actionButtonContent}
           labelStyle={styles.actionButtonLabel}
-          onPress={() => router.push('/record')}
+          onPress={() => router.push({ pathname: '/record', params: { type: 'earn' } })}
         >
           시간 벌기
         </Button>
@@ -86,7 +86,7 @@ function ChildHomeScreen() {
           style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
           contentStyle={styles.actionButtonContent}
           labelStyle={styles.actionButtonLabel}
-          onPress={() => router.push('/record')}
+          onPress={() => router.push({ pathname: '/record', params: { type: 'spend' } })}
         >
           시간 쓰기
         </Button>
@@ -131,17 +131,6 @@ function ChildHomeScreen() {
   );
 }
 
-// 더미 자녀 데이터
-const dummyChildren = [
-  {
-    id: 'child-1',
-    name: '홍길동',
-    balance: 15.5,
-    todayEarned: 3.0,
-    todaySpent: 1.0,
-    pendingCount: 2,
-  },
-];
 
 // 부모 홈 화면
 function ParentHomeScreen() {
@@ -158,9 +147,13 @@ function ParentHomeScreen() {
     return `${month}/${day} ${dayName}요일`;
   };
 
-  // 더미 데이터 또는 실제 데이터 사용
-  const children = dummyChildren;
-  const totalPending = pendingApprovals.length || 3; // 더미: 3건
+  // 자녀 목록 (user.children에서 가져옴)
+  // NOTE: 잔액 등 실시간 데이터는 DB 연동 후 조회 가능
+  const children = (user?.children || []).map(child => ({
+    ...child,
+    pendingCount: pendingApprovals.filter(a => a.userId === child.id).length,
+  }));
+  const totalPending = pendingApprovals.length;
 
   return (
     <ScrollView style={styles.container}>
@@ -198,6 +191,17 @@ function ParentHomeScreen() {
         자녀 현황
       </Text>
 
+      {children.length === 0 && (
+        <Surface style={styles.emptyChildContainer}>
+          <Text style={styles.emptyChildText}>
+            등록된 자녀가 없습니다.
+          </Text>
+          <Text style={styles.emptyChildHint}>
+            '자녀 추가' 버튼을 눌러 자녀 계정을 추가하세요.
+          </Text>
+        </Surface>
+      )}
+
       {children.map((child) => (
         <Card key={child.id} style={styles.childCard}>
           <Card.Content>
@@ -212,8 +216,8 @@ function ParentHomeScreen() {
                   <Text variant="titleMedium" style={styles.childName}>
                     {child.name}
                   </Text>
-                  <Text style={styles.childBalance}>
-                    잔액: {child.balance.toFixed(1)}시간
+                  <Text style={styles.childEmail}>
+                    {child.email}
                   </Text>
                 </View>
               </View>
@@ -226,20 +230,7 @@ function ParentHomeScreen() {
               )}
             </View>
 
-            <View style={styles.childStats}>
-              <View style={styles.childStatItem}>
-                <Text style={styles.childStatLabel}>오늘 번 시간</Text>
-                <Text style={[styles.childStatValue, { color: '#10B981' }]}>
-                  +{child.todayEarned.toFixed(1)}
-                </Text>
-              </View>
-              <View style={styles.childStatItem}>
-                <Text style={styles.childStatLabel}>오늘 쓴 시간</Text>
-                <Text style={[styles.childStatValue, { color: '#F59E0B' }]}>
-                  -{child.todaySpent.toFixed(1)}
-                </Text>
-              </View>
-            </View>
+            {/* TODO: DB 연동 후 자녀 실시간 통계 표시 */}
           </Card.Content>
         </Card>
       ))}
@@ -250,7 +241,7 @@ function ParentHomeScreen() {
           mode="outlined"
           icon="account-plus"
           style={styles.parentActionButton}
-          onPress={() => {}}
+          onPress={() => router.push('/(tabs)/add-child')}
         >
           자녀 추가
         </Button>
@@ -258,7 +249,14 @@ function ParentHomeScreen() {
           mode="outlined"
           icon="cash"
           style={styles.parentActionButton}
-          onPress={() => {}}
+          onPress={() => {
+            const message = '저금 교환 기능은 준비 중입니다.';
+            if (Platform.OS === 'web') {
+              window.alert(message);
+            } else {
+              Alert.alert('알림', message);
+            }
+          }}
         >
           저금 교환
         </Button>
@@ -447,9 +445,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1E293B',
   },
-  childBalance: {
+  childEmail: {
     color: '#64748B',
     marginTop: 2,
+    fontSize: 12,
   },
   pendingBadge: {
     backgroundColor: '#FEE2E2',
@@ -462,27 +461,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  childStats: {
-    flexDirection: 'row',
-    marginTop: 16,
-    gap: 16,
-  },
-  childStatItem: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  childStatLabel: {
-    color: '#64748B',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  childStatValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   parentActions: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -492,5 +470,21 @@ const styles = StyleSheet.create({
   parentActionButton: {
     flex: 1,
     borderColor: '#E2E8F0',
+  },
+  emptyChildContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  emptyChildText: {
+    color: '#64748B',
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  emptyChildHint: {
+    color: '#94A3B8',
+    fontSize: 14,
   },
 });

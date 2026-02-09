@@ -14,9 +14,9 @@ export default function SignupScreen() {
   });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
-  const { isLoading, setUser, setIsLoading } = useStore();
+  const { isLoading, authError, signUp } = useStore();
 
   const updateField = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -53,22 +53,8 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     if (!validate()) return;
 
-    setIsLoading(true);
-    // 임시 회원가입 - 더미 유저 생성
-    setTimeout(() => {
-      setUser({
-        id: 'temp-user-' + Date.now(),
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        balance: 0,
-        totalEarned: 0,
-        totalSpent: 0,
-        createdAt: new Date(),
-      });
-      setIsLoading(false);
-      router.replace('/(tabs)');
-    }, 500);
+    await signUp(formData);
+    // 회원가입 성공 시 _layout.tsx의 useProtectedRoute에서 자동으로 리다이렉트됨
   };
 
   return (
@@ -85,6 +71,13 @@ export default function SignupScreen() {
             <Text variant="titleLarge" style={styles.cardTitle}>
               회원가입
             </Text>
+
+            {/* 에러 메시지 표시 */}
+            {authError && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{authError}</Text>
+              </View>
+            )}
 
             {/* 계정 유형 선택 */}
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -247,6 +240,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     fontWeight: 'bold',
+  },
+  errorContainer: {
+    backgroundColor: '#FEE2E2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#DC2626',
+    textAlign: 'center',
   },
   sectionTitle: {
     marginBottom: 12,
