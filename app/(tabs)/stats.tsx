@@ -3,28 +3,12 @@ import { StyleSheet, View, ScrollView, Dimensions, TouchableOpacity } from 'reac
 import { Text, Card, Chip, Surface, IconButton } from 'react-native-paper';
 import { StackedBarChart, LineChart, PieChart } from 'react-native-chart-kit';
 import { useStore } from '@/store/useStore';
+import { getCategoryLabel } from '@/constants/categoryNames';
 import { Activity, Exchange, ChildInfo } from '@/types';
 
 type PeriodType = 'daily' | 'weekly' | 'monthly';
 
 const screenWidth = Dimensions.get('window').width;
-
-const categoryNames: Record<string, string> = {
-  holiday_base: '휴일 기본',
-  academy_study: '학원/과외 공부',
-  academy_homework: '학원/과외 숙제',
-  self_study: '스스로 공부',
-  reading: '독서 + 독후감',
-  good_deed: '좋은 일',
-  coding: '코딩/AI',
-  app_complete: '앱 완성',
-  app_store: '앱스토어 등록',
-  game: '컴퓨터 게임',
-  youtube: '유튜브',
-  no_record: '기록 안함',
-  unauthorized_use: '잔액 없이 사용',
-  false_record: '거짓 기록',
-};
 
 const categoryColors: Record<string, string> = {
   holiday_base: '#5D7B3A',
@@ -103,7 +87,7 @@ function getCategoryBreakdown(activities: Activity[], type: 'earn' | 'spend') {
   return Object.entries(byCategory)
     .map(([category, total]) => ({
       category,
-      label: categoryNames[category] || category,
+      label: getCategoryLabel(category),
       total,
     }))
     .sort((a, b) => b.total - a.total);
@@ -189,7 +173,7 @@ function getPenaltyAnalytics(activities: Activity[]) {
     monthTotal: penalties.reduce((s, p) => s + p.earnedTime, 0),
     byCategory: Object.entries(byCategory).map(([cat, data]) => ({
       category: cat,
-      label: categoryNames[cat] || cat,
+      label: getCategoryLabel(cat),
       ...data,
     })).sort((a, b) => b.total - a.total),
   };
@@ -241,10 +225,10 @@ function getDailyData(activities: Activity[], dateStr: string) {
     penalty,
     net,
     earnByCategory: Object.entries(earnByCategory).map(([cat, total]) => ({
-      category: cat, label: categoryNames[cat] || cat, total,
+      category: cat, label: getCategoryLabel(cat), total,
     })).sort((a, b) => b.total - a.total),
     spendByCategory: Object.entries(spendByCategory).map(([cat, total]) => ({
-      category: cat, label: categoryNames[cat] || cat, total,
+      category: cat, label: getCategoryLabel(cat), total,
     })).sort((a, b) => b.total - a.total),
     totalActivities: dayActivities.length,
   };
@@ -476,7 +460,7 @@ function DailyStatsView({ activities, selectedDate, onDateChange }: {
                     <Text style={[styles.activityTypeBadgeText, { color: typeStyle.color }]}>{typeStyle.label}</Text>
                   </View>
                   <View style={styles.activityInfo}>
-                    <Text style={styles.activityCategory}>{categoryNames[act.category] || act.category}</Text>
+                    <Text style={styles.activityCategory}>{getCategoryLabel(act.category)}</Text>
                     {act.startTime && <Text style={styles.activityTime}>{act.startTime}~{act.endTime}</Text>}
                   </View>
                   <Text style={[styles.activityHours, { color: typeStyle.color }]}>

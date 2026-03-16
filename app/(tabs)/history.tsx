@@ -2,10 +2,9 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
 import { Text, Chip, Surface, SegmentedButtons, Searchbar, Portal, Dialog, Button, TextInput, Menu, IconButton } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
-import { EARN_ACTIVITIES, SPEND_ACTIVITIES, PENALTY_ACTIVITIES, NEUTRAL_ACTIVITIES } from '@/constants/activities';
 import { getCategoryLabel } from '@/constants/categoryNames';
 import { exportActivitiesAsCSV } from '@/services/exportService';
-import { Activity, EarnCategory, SpendCategory, PenaltyCategory, NeutralCategory } from '@/types';
+import { Activity } from '@/types';
 
 type FilterType = 'all' | 'earn' | 'spend' | 'penalty';
 
@@ -46,17 +45,7 @@ export default function HistoryScreen() {
   const [editEndTime, setEditEndTime] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
-  const getActivityLabel = (activity: Activity) => {
-    if (activity.type === 'earn') {
-      return EARN_ACTIVITIES[activity.category as EarnCategory]?.label || activity.category;
-    } else if (activity.type === 'spend') {
-      return SPEND_ACTIVITIES[activity.category as SpendCategory]?.label || activity.category;
-    } else if (activity.type === 'penalty') {
-      return PENALTY_ACTIVITIES[activity.category as PenaltyCategory]?.label || activity.category;
-    } else {
-      return NEUTRAL_ACTIVITIES[activity.category as NeutralCategory]?.label || activity.category;
-    }
-  };
+  const getActivityLabel = (activity: Activity) => getCategoryLabel(activity.category);
 
   const filteredActivities = useMemo(() => {
     return activities.filter((activity) => {
