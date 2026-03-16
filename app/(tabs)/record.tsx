@@ -372,7 +372,7 @@ export default function RecordScreen() {
         onPress={handleSubmit}
         style={[
           styles.submitButton,
-          { backgroundColor: recordType === 'earn' ? '#10B981' : recordType === 'spend' ? '#F59E0B' : '#6366F1' }
+          { backgroundColor: recordType === 'earn' ? '#5D7B3A' : recordType === 'spend' ? '#C49A6C' : '#6B4226' }
         ]}
         contentStyle={styles.submitButtonContent}
         labelStyle={styles.submitButtonLabel}
@@ -405,19 +405,19 @@ export default function RecordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   segmentedButtons: {
     margin: 16,
   },
   earnButton: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E8F0E0',
   },
   spendButton: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#F5ECD7',
   },
   neutralButton: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#EFEBE9',
   },
   card: {
     marginHorizontal: 16,
@@ -428,13 +428,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#EFEBE9',
   },
   infoText: {
-    color: '#64748B',
+    color: '#8D6E63',
   },
   approvalText: {
-    color: '#6366F1',
+    color: '#6B4226',
     marginTop: 4,
     fontWeight: '500',
   },
@@ -450,13 +450,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   chipSelected: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#5D7B3A',
   },
   chipSelectedSpend: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#C49A6C',
   },
   chipSelectedNeutral: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#6B4226',
   },
   chipTextSelected: {
     color: '#FFFFFF',
@@ -474,14 +474,14 @@ const styles = StyleSheet.create({
   timeSeparator: {
     marginHorizontal: 12,
     fontSize: 20,
-    color: '#64748B',
+    color: '#8D6E63',
   },
   timeHint: {
-    color: '#94A3B8',
+    color: '#A1887F',
     marginBottom: 12,
   },
   timeError: {
-    color: '#DC2626',
+    color: '#8B3A3A',
     fontSize: 12,
     marginTop: 4,
     marginBottom: 4,
@@ -501,10 +501,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 12,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E8F0E0',
   },
   resultValue: {
-    color: '#059669',
+    color: '#4A6B2E',
     fontWeight: 'bold',
     marginTop: 8,
   },

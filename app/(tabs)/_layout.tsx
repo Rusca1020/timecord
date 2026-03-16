@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { useStore } from '@/store/useStore';
@@ -18,20 +19,20 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#6366F1',
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarActiveTintColor: '#6B4226',
+        tabBarInactiveTintColor: '#A1887F',
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FFFDF7',
           borderTopWidth: 1,
-          borderTopColor: '#E2E8F0',
+          borderTopColor: '#D7CCC8',
           height: 60,
           paddingBottom: 8,
           paddingTop: 8,
         },
         headerStyle: {
-          backgroundColor: '#6366F1',
+          backgroundColor: '#6B4226',
         },
-        headerTintColor: '#FFFFFF',
+        headerTintColor: '#FFF8E1',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
@@ -41,7 +42,12 @@ export default function TabLayout() {
         options={{
           title: '홈',
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
-          headerTitle: 'Timecord',
+          headerTitle: () => (
+            <View style={headerStyles.container}>
+              <FontAwesome name="clock-o" size={22} color="#FFF8E1" style={headerStyles.icon} />
+              <Text style={headerStyles.title}>Timecord</Text>
+            </View>
+          ),
         }}
       />
       {/* 자녀 전용: 기록 탭 */}
@@ -70,12 +76,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="stats"
+        options={{
+          title: '통계',
+          tabBarIcon: ({ color }) => <TabBarIcon name="bar-chart" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="notifications"
         options={{
           title: '알림',
           tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
           tabBarBadge: unreadNotificationCount > 0 ? unreadNotificationCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#EF4444', fontSize: 10 },
+          tabBarBadgeStyle: { backgroundColor: '#8B3A3A', fontSize: 10 },
         }}
       />
       <Tabs.Screen
@@ -93,6 +106,45 @@ export default function TabLayout() {
           href: null,
         }}
       />
+      {/* 숨겨진 화면: 교환 관리 (부모용) */}
+      <Tabs.Screen
+        name="exchange"
+        options={{
+          title: '교환 관리',
+          href: null,
+        }}
+      />
+      {/* 숨겨진 화면: 규칙 보기 */}
+      <Tabs.Screen
+        name="rules"
+        options={{
+          title: '규칙 보기',
+          href: null,
+        }}
+      />
+      {/* 숨겨진 화면: 알림 설정 */}
+      <Tabs.Screen
+        name="notification-settings"
+        options={{
+          title: '알림 설정',
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
+
+const headerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  icon: {
+    marginRight: 8,
+  },
+  title: {
+    color: '#FFF8E1',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+});

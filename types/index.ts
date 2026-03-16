@@ -48,6 +48,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  avatar?: string;           // 프로필 아바타 이모지
   parentId?: string;        // 자녀인 경우 연결된 부모 ID
   children?: ChildInfo[];   // 부모인 경우 자녀 정보 목록
   balance: number;          // 현재 잔액 (시간)
@@ -82,6 +83,7 @@ export interface Activity {
 export interface Exchange {
   id: string;
   userId: string;
+  userName?: string;        // 자녀 이름 (부모 조회용)
   hours: number;            // 교환할 시간
   amount: number;           // 교환 금액 (원)
   status: 'pending' | 'approved' | 'completed' | 'rejected';
@@ -102,7 +104,7 @@ export interface DailySummary {
 }
 
 // 알림 타입
-export type NotificationType = 'approval_request' | 'approved' | 'rejected';
+export type NotificationType = 'approval_request' | 'approved' | 'rejected' | 'penalty' | 'exchange_request' | 'exchange_approved' | 'exchange_rejected';
 
 // 알림
 export interface AppNotification {

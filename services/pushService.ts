@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { isNotificationEnabled } from './notificationPreferences';
+import { NotificationType } from '@/types';
 
 let Notifications: typeof import('expo-notifications') | null = null;
 let Device: typeof import('expo-device') | null = null;
@@ -21,13 +23,31 @@ export function configureNotifications(): void {
   if (!Notifications || Platform.OS === 'web') return;
 
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data as Record<string, string> | undefined;
+      const type = data?.type as NotificationType | undefined;
+
+      if (type) {
+        const enabled = await isNotificationEnabled(type);
+        if (!enabled) {
+          return {
+            shouldShowAlert: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+            shouldShowBanner: false,
+            shouldShowList: false,
+          };
+        }
+      }
+
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    },
   });
 }
 

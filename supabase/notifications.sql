@@ -6,7 +6,7 @@ create table if not exists public.notifications (
   recipient_id uuid not null references auth.users(id) on delete cascade,
   sender_id uuid not null references auth.users(id) on delete cascade,
   sender_name text,
-  type text not null check (type in ('approval_request', 'approved', 'rejected')),
+  type text not null check (type in ('approval_request', 'approved', 'rejected', 'penalty', 'exchange_request', 'exchange_approved', 'exchange_rejected')),
   activity_id uuid references public.activities(id) on delete set null,
   title text not null,
   body text not null,

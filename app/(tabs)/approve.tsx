@@ -1,21 +1,10 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
-import { Card, Text, Button, Chip, Surface, Portal, Dialog } from 'react-native-paper';
+import { Card, Text, Button, Chip, Surface, Portal, Dialog, TextInput, RadioButton } from 'react-native-paper';
 import { useStore } from '@/store/useStore';
-import { Activity } from '@/types';
-
-// 카테고리 한글 이름
-const categoryNames: Record<string, string> = {
-  holiday_base: '휴일 기본',
-  academy_study: '학원/과외 공부',
-  academy_homework: '학원/과외 숙제',
-  self_study: '스스로 공부',
-  reading: '독서 + 독후감',
-  good_deed: '좋은 일',
-  coding: '코딩/AI',
-  app_complete: '앱 완성',
-  app_store: '앱스토어 등록',
-};
+import { Activity, PenaltyCategory, ChildInfo } from '@/types';
+import { PENALTY_ACTIVITIES } from '@/constants/activities';
+import { getCategoryLabel } from '@/constants/categoryNames';
 
 
 export default function ApproveScreen() {
@@ -23,11 +12,36 @@ export default function ApproveScreen() {
   const pendingApprovals = useStore((state) => state.pendingApprovals);
   const approveActivity = useStore((state) => state.approveActivity);
   const rejectActivity = useStore((state) => state.rejectActivity);
+  const assignPenalty = useStore((state) => state.assignPenalty);
 
   // 중복 클릭 방지를 위한 처리 중인 활동 ID 추적
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   // 거절 확인 다이얼로그
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+
+  // 벌금 부여 다이얼로그
+  const [penaltyVisible, setPenaltyVisible] = useState(false);
+  const [penaltyChildId, setPenaltyChildId] = useState<string>('');
+  const [penaltyCategory, setPenaltyCategory] = useState<PenaltyCategory>('no_record');
+  const [penaltyMemo, setPenaltyMemo] = useState('');
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+  const children: ChildInfo[] = user?.children || [];
+
+  const openPenaltyDialog = () => {
+    setPenaltyChildId(children.length > 0 ? children[0].id : '');
+    setPenaltyCategory('no_record');
+    setPenaltyMemo('');
+    setPenaltyVisible(true);
+  };
+
+  const confirmPenalty = async () => {
+    if (!penaltyChildId) return;
+    setPenaltyLoading(true);
+    const child = children.find(c => c.id === penaltyChildId);
+    await assignPenalty(penaltyChildId, child?.name || '', penaltyCategory, penaltyMemo || undefined);
+    setPenaltyLoading(false);
+    setPenaltyVisible(false);
+  };
 
   const activities = pendingApprovals;
 
@@ -110,7 +124,7 @@ export default function ApproveScreen() {
               <Card.Content>
                 <View style={styles.cardHeader}>
                   <Text variant="titleMedium" style={styles.categoryName}>
-                    {categoryNames[activity.category] || activity.category}
+                    {getCategoryLabel(activity.category)}
                   </Text>
                   <Chip
                     compact
@@ -153,7 +167,7 @@ export default function ApproveScreen() {
                     mode="outlined"
                     onPress={() => handleReject(activity.id)}
                     style={styles.rejectButton}
-                    textColor="#EF4444"
+                    textColor="#8B3A3A"
                     disabled={processingIds.has(activity.id)}
                     loading={processingIds.has(activity.id)}
                   >
@@ -163,7 +177,7 @@ export default function ApproveScreen() {
                     mode="contained"
                     onPress={() => handleApprove(activity.id)}
                     style={styles.approveButton}
-                    buttonColor="#10B981"
+                    buttonColor="#5D7B3A"
                     disabled={processingIds.has(activity.id)}
                     loading={processingIds.has(activity.id)}
                   >
@@ -175,6 +189,21 @@ export default function ApproveScreen() {
           ))
       )}
 
+      {/* 벌금 부여 버튼 */}
+      {children.length > 0 && (
+        <View style={styles.penaltyButtonContainer}>
+          <Button
+            mode="contained"
+            onPress={openPenaltyDialog}
+            buttonColor="#6D2B2B"
+            icon="alert-circle"
+            style={styles.penaltyButton}
+          >
+            벌금 부여
+          </Button>
+        </View>
+      )}
+
       {/* 거절 확인 다이얼로그 */}
       <Portal>
         <Dialog visible={rejectTargetId !== null} onDismiss={() => setRejectTargetId(null)}>
@@ -184,7 +213,80 @@ export default function ApproveScreen() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setRejectTargetId(null)}>취소</Button>
-            <Button onPress={confirmReject} textColor="#DC2626">거절</Button>
+            <Button onPress={confirmReject} textColor="#6D2B2B">거절</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* 벌금 부여 다이얼로그 */}
+      <Portal>
+        <Dialog visible={penaltyVisible} onDismiss={() => setPenaltyVisible(false)}>
+          <Dialog.Title>벌금 부여</Dialog.Title>
+          <Dialog.Content>
+            {/* 자녀 선택 */}
+            {children.length > 1 && (
+              <View style={styles.penaltySection}>
+                <Text variant="bodySmall" style={styles.penaltyLabel}>자녀 선택</Text>
+                <View style={styles.penaltyChips}>
+                  {children.map((child) => (
+                    <Chip
+                      key={child.id}
+                      selected={penaltyChildId === child.id}
+                      onPress={() => setPenaltyChildId(child.id)}
+                      style={penaltyChildId === child.id ? styles.penaltyChipSelected : styles.penaltyChipDefault}
+                      textStyle={penaltyChildId === child.id ? { color: '#FFFFFF' } : undefined}
+                    >
+                      {child.name}
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+            )}
+            {children.length === 1 && (
+              <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
+                대상: {children[0].name}
+              </Text>
+            )}
+
+            {/* 벌금 종류 */}
+            <View style={styles.penaltySection}>
+              <Text variant="bodySmall" style={styles.penaltyLabel}>벌금 종류</Text>
+              <RadioButton.Group
+                onValueChange={(value) => setPenaltyCategory(value as PenaltyCategory)}
+                value={penaltyCategory}
+              >
+                {(Object.entries(PENALTY_ACTIVITIES) as [PenaltyCategory, { label: string; hours: number; description: string }][]).map(([key, info]) => (
+                  <View key={key} style={styles.radioRow}>
+                    <RadioButton value={key} />
+                    <View style={styles.radioInfo}>
+                      <Text style={styles.radioLabel}>{info.label} (-{info.hours}시간)</Text>
+                      <Text variant="bodySmall" style={styles.radioDesc}>{info.description}</Text>
+                    </View>
+                  </View>
+                ))}
+              </RadioButton.Group>
+            </View>
+
+            {/* 메모 */}
+            <TextInput
+              label="메모 (선택)"
+              value={penaltyMemo}
+              onChangeText={setPenaltyMemo}
+              mode="outlined"
+              dense
+              style={{ marginTop: 8 }}
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setPenaltyVisible(false)}>취소</Button>
+            <Button
+              onPress={confirmPenalty}
+              textColor="#6D2B2B"
+              loading={penaltyLoading}
+              disabled={penaltyLoading || !penaltyChildId}
+            >
+              부여
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -195,7 +297,7 @@ export default function ApproveScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
@@ -207,10 +309,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#3E2723',
   },
   countChip: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#EFEBE9',
   },
   emptyContainer: {
     margin: 16,
@@ -219,7 +321,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#94A3B8',
+    color: '#A1887F',
   },
   card: {
     marginHorizontal: 16,
@@ -234,7 +336,7 @@ const styles = StyleSheet.create({
   },
   categoryName: {
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#3E2723',
   },
   approverChip: {
     height: 28,
@@ -250,28 +352,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#EFEBE9',
   },
   detailLabel: {
-    color: '#64748B',
+    color: '#8D6E63',
   },
   detailValue: {
-    color: '#1E293B',
+    color: '#3E2723',
     fontWeight: '500',
   },
   descriptionContainer: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
   },
   descriptionLabel: {
-    color: '#64748B',
+    color: '#8D6E63',
     fontSize: 12,
     marginBottom: 4,
   },
   description: {
-    color: '#1E293B',
+    color: '#3E2723',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -280,9 +382,51 @@ const styles = StyleSheet.create({
   },
   rejectButton: {
     flex: 1,
-    borderColor: '#FCA5A5',
+    borderColor: '#D4A59A',
   },
   approveButton: {
     flex: 1,
+  },
+  penaltyButtonContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  penaltyButton: {
+    borderRadius: 12,
+  },
+  penaltySection: {
+    marginBottom: 12,
+  },
+  penaltyLabel: {
+    color: '#8D6E63',
+    marginBottom: 8,
+  },
+  penaltyChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  penaltyChipDefault: {
+    backgroundColor: '#EFEBE9',
+  },
+  penaltyChipSelected: {
+    backgroundColor: '#6B4226',
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  radioInfo: {
+    flex: 1,
+  },
+  radioLabel: {
+    color: '#3E2723',
+    fontWeight: '500',
+  },
+  radioDesc: {
+    color: '#A1887F',
+    fontSize: 11,
   },
 });

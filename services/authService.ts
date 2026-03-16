@@ -17,6 +17,7 @@ function mapSupabaseUser(supabaseUser: SupabaseUser): User {
     name: metadata.name || supabaseUser.email?.split('@')[0] || 'User',
     email: supabaseUser.email || '',
     role: (metadata.role as UserRole) || 'child',
+    avatar: metadata.avatar as string | undefined,
     parentId: metadata.parentId,
     children: (metadata.children as ChildInfo[]) || [],
     balance: metadata.balance || 0,
@@ -132,7 +133,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
 // 사용자 메타데이터 업데이트 (잔액 등)
 export async function updateUserMetadata(
-  updates: Partial<Pick<User, 'balance' | 'totalEarned' | 'totalSpent' | 'parentId' | 'children'>>
+  updates: Partial<Pick<User, 'name' | 'balance' | 'totalEarned' | 'totalSpent' | 'parentId' | 'children'>>
 ): Promise<AuthResult> {
   try {
     const { data, error } = await supabase.auth.updateUser({
@@ -155,6 +156,84 @@ export async function updateUserMetadata(
     return {
       success: false,
       error: err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.',
+    };
+  }
+}
+
+// 사용자 이름 변경 (auth 메타데이터 + profiles 테이블)
+export async function updateUserName(name: string): Promise<AuthResult> {
+  try {
+    const { data, error } = await supabase.auth.updateUser({
+      data: { name },
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data.user) {
+      return { success: false, error: '이름 변경에 실패했습니다.' };
+    }
+
+    // profiles 테이블도 업데이트
+    await supabase
+      .from('profiles')
+      .update({ name })
+      .eq('id', data.user.id);
+
+    return {
+      success: true,
+      user: mapSupabaseUser(data.user),
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : '이름 변경에 실패했습니다.',
+    };
+  }
+}
+
+// 아바타 변경
+export async function updateAvatar(avatar: string): Promise<AuthResult> {
+  try {
+    const { data, error } = await supabase.auth.updateUser({
+      data: { avatar },
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data.user) {
+      return { success: false, error: '아바타 변경에 실패했습니다.' };
+    }
+
+    return {
+      success: true,
+      user: mapSupabaseUser(data.user),
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : '아바타 변경에 실패했습니다.',
+    };
+  }
+}
+
+// 비밀번호 재설정 이메일 전송
+export async function resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : '비밀번호 재설정 이메일 전송에 실패했습니다.',
     };
   }
 }

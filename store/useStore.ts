@@ -1,10 +1,15 @@
 import { create } from 'zustand';
-import { User, Activity, AppNotification, SignupFormData } from '@/types';
+import { User, Activity, Exchange, AppNotification, SignupFormData, PenaltyCategory } from '@/types';
 import * as authService from '@/services/authService';
 import * as activityService from '@/services/activityService';
 import * as connectionService from '@/services/connectionService';
 import * as notificationService from '@/services/notificationService';
-import { notifyParentsOfNewActivity, notifyChildOfDecision } from '@/services/notificationHelpers';
+import * as exchangeService from '@/services/exchangeService';
+import { notifyParentsOfNewActivity, notifyChildOfDecision, notifyChildOfPenalty, notifyParentsOfExchange, notifyChildOfExchangeDecision } from '@/services/notificationHelpers';
+import { EXCHANGE_RATE, PENALTY_ACTIVITIES } from '@/constants/activities';
+
+// Snackbar 타입
+type SnackbarType = 'error' | 'success' | 'info';
 
 interface AppState {
   // 사용자 상태
@@ -23,6 +28,14 @@ interface AppState {
   // 알림
   notifications: AppNotification[];
   unreadNotificationCount: number;
+
+  // 교환
+  exchanges: Exchange[];
+  pendingExchanges: Exchange[];
+
+  // Snackbar
+  snackbarMessage: string | null;
+  snackbarType: SnackbarType;
 
   // 기본 액션
   setUser: (user: User | null) => void;
@@ -60,6 +73,29 @@ interface AppState {
 
   // 거절 (알림 포함)
   rejectActivity: (id: string) => Promise<void>;
+
+  // 벌금 부여 (부모 → 자녀)
+  assignPenalty: (childId: string, childName: string, category: PenaltyCategory, description?: string) => Promise<boolean>;
+
+  // 활동 수정
+  editActivity: (id: string, updates: Partial<Activity>) => Promise<boolean>;
+
+  // 프로필 편집
+  updateProfile: (name: string) => Promise<boolean>;
+  updateAvatar: (avatar: string) => Promise<boolean>;
+
+  // 교환 액션
+  loadExchanges: () => Promise<void>;
+  requestExchange: (hours: number) => Promise<boolean>;
+  approveExchange: (exchangeId: string) => Promise<void>;
+  rejectExchange: (exchangeId: string) => Promise<void>;
+  completeExchange: (exchangeId: string) => Promise<void>;
+  setExchanges: (exchanges: Exchange[]) => void;
+  setPendingExchanges: (exchanges: Exchange[]) => void;
+
+  // Snackbar 액션
+  showSnackbar: (message: string, type?: SnackbarType) => void;
+  hideSnackbar: () => void;
 }
 
 const initialState = {
@@ -72,6 +108,10 @@ const initialState = {
   pendingApprovals: [],
   notifications: [],
   unreadNotificationCount: 0,
+  exchanges: [],
+  pendingExchanges: [],
+  snackbarMessage: null as string | null,
+  snackbarType: 'info' as SnackbarType,
 };
 
 export const useStore = create<AppState>()((set, get) => ({
@@ -111,7 +151,7 @@ export const useStore = create<AppState>()((set, get) => ({
 
     if (result.success && result.user) {
       set({ user: result.user, isAuthenticated: true, isLoading: false });
-      // 로그인 후 연결 동기화 + 활동 데이터 + 알림 로드
+      // 로그인 후 연결 동기화 + 활동 데이터 + 알림 + 교환 로드
       await get().syncConnections();
       await get().loadActivities();
       if (get().user?.role === 'parent') {
@@ -119,6 +159,7 @@ export const useStore = create<AppState>()((set, get) => ({
       }
       await get().loadNotifications();
       await get().loadUnreadCount();
+      await get().loadExchanges();
     } else {
       set({ authError: result.error || '로그인에 실패했습니다.', isLoading: false });
     }
@@ -132,7 +173,7 @@ export const useStore = create<AppState>()((set, get) => ({
 
     if (user) {
       set({ user, isAuthenticated: true, isLoading: false });
-      // 세션 복원 후 연결 동기화 + 활동 데이터 + 알림 로드
+      // 세션 복원 후 연결 동기화 + 활동 데이터 + 알림 + 교환 로드
       await get().syncConnections();
       await get().loadActivities();
       if (get().user?.role === 'parent') {
@@ -140,6 +181,7 @@ export const useStore = create<AppState>()((set, get) => ({
       }
       await get().loadNotifications();
       await get().loadUnreadCount();
+      await get().loadExchanges();
     } else {
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
@@ -158,6 +200,8 @@ export const useStore = create<AppState>()((set, get) => ({
       pendingApprovals: [],
       notifications: [],
       unreadNotificationCount: 0,
+      exchanges: [],
+      pendingExchanges: [],
     });
   },
 
@@ -199,21 +243,27 @@ export const useStore = create<AppState>()((set, get) => ({
 
     const todayDate = new Date().toISOString().split('T')[0];
 
-    if (user.role === 'child') {
-      // 자녀: 본인 활동만 조회
-      const result = await activityService.getMyActivities();
-      if (result.success && result.activities) {
-        const todayActivities = result.activities.filter(a => a.date === todayDate);
-        set({ activities: result.activities, todayActivities });
+    try {
+      if (user.role === 'child') {
+        const result = await activityService.getMyActivities();
+        if (result.success && result.activities) {
+          const todayActivities = result.activities.filter(a => a.date === todayDate);
+          set({ activities: result.activities, todayActivities });
+        } else {
+          get().showSnackbar('활동 데이터를 불러오지 못했습니다.', 'error');
+        }
+      } else {
+        const childIds = (user.children || []).map(c => c.id);
+        const result = await activityService.getChildrenActivities(childIds);
+        if (result.success && result.activities) {
+          const todayActivities = result.activities.filter(a => a.date === todayDate);
+          set({ activities: result.activities, todayActivities });
+        } else {
+          get().showSnackbar('활동 데이터를 불러오지 못했습니다.', 'error');
+        }
       }
-    } else {
-      // 부모: 자녀들 활동 조회
-      const childIds = (user.children || []).map(c => c.id);
-      const result = await activityService.getChildrenActivities(childIds);
-      if (result.success && result.activities) {
-        const todayActivities = result.activities.filter(a => a.date === todayDate);
-        set({ activities: result.activities, todayActivities });
-      }
+    } catch {
+      get().showSnackbar('활동 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
     }
   },
 
@@ -333,13 +383,145 @@ export const useStore = create<AppState>()((set, get) => ({
       }
     }
   },
+  // 교환 목록 로드
+  loadExchanges: async () => {
+    const { user } = get();
+    if (!user) return;
+
+    try {
+      if (user.role === 'parent') {
+        const childIds = (user.children || []).map(c => c.id);
+        const result = await exchangeService.getChildrenExchanges(childIds);
+        if (result.success && result.exchanges) {
+          set({
+            exchanges: result.exchanges,
+            pendingExchanges: result.exchanges.filter(e => e.status === 'pending'),
+          });
+        } else {
+          get().showSnackbar('교환 내역을 불러오지 못했습니다.', 'error');
+        }
+      } else {
+        const result = await exchangeService.getMyExchanges(user.id);
+        if (result.success && result.exchanges) {
+          set({ exchanges: result.exchanges });
+        } else {
+          get().showSnackbar('교환 내역을 불러오지 못했습니다.', 'error');
+        }
+      }
+    } catch {
+      get().showSnackbar('교환 내역을 불러오는 중 오류가 발생했습니다.', 'error');
+    }
+  },
+
+  // 교환 신청 (자녀)
+  requestExchange: async (hours) => {
+    const { user } = get();
+    if (!user) return false;
+
+    const amount = hours * EXCHANGE_RATE.perHour;
+    const result = await exchangeService.requestExchange(user.id, user.name, hours, amount);
+    if (!result.success || !result.exchange) return false;
+
+    // activities에 exchange 타입 활동 추가 (잔액 차감용)
+    const exchangeActivity: Omit<Activity, 'id' | 'createdAt'> = {
+      userId: user.id,
+      userName: user.name,
+      date: new Date().toISOString().split('T')[0],
+      type: 'exchange',
+      category: 'game' as any, // exchange는 카테고리 불필요, placeholder
+      duration: hours,
+      multiplier: 1,
+      earnedTime: hours, // useComputedBalance에서 exchange 타입 차감
+      requiresApproval: false,
+      approved: true,
+      description: `${hours}시간 → ${amount.toLocaleString()}원 교환`,
+    };
+    await get().addActivity(exchangeActivity);
+
+    // 교환 목록 갱신
+    const { exchanges } = get();
+    set({ exchanges: [result.exchange, ...exchanges] });
+
+    // 부모에게 알림
+    notifyParentsOfExchange(user, result.exchange);
+
+    return true;
+  },
+
+  // 교환 승인 (부모)
+  approveExchange: async (exchangeId) => {
+    const { user, exchanges } = get();
+    if (!user) return;
+
+    const exchange = exchanges.find(e => e.id === exchangeId);
+    if (!exchange) return;
+
+    const result = await exchangeService.approveExchange(exchangeId, user.id);
+    if (result.success) {
+      const updated = exchanges.map(e => e.id === exchangeId ? { ...e, status: 'approved' as const } : e);
+      set({
+        exchanges: updated,
+        pendingExchanges: updated.filter(e => e.status === 'pending'),
+      });
+      notifyChildOfExchangeDecision(user, exchange, 'exchange_approved');
+    }
+  },
+
+  // 교환 거절 (부모) - 잔액 복원을 위해 exchange activity 삭제
+  rejectExchange: async (exchangeId) => {
+    const { user, exchanges, activities } = get();
+    if (!user) return;
+
+    const exchange = exchanges.find(e => e.id === exchangeId);
+    if (!exchange) return;
+
+    const result = await exchangeService.rejectExchange(exchangeId);
+    if (result.success) {
+      // 해당 교환에 대한 activity 삭제 (잔액 복원)
+      const exchangeActivity = activities.find(
+        a => a.type === 'exchange' && a.userId === exchange.userId &&
+             a.duration === exchange.hours &&
+             a.description?.includes(`${exchange.hours}시간`)
+      );
+      if (exchangeActivity) {
+        await activityService.deleteActivity(exchangeActivity.id);
+        const todayDate = new Date().toISOString().split('T')[0];
+        const newActivities = activities.filter(a => a.id !== exchangeActivity.id);
+        set({
+          activities: newActivities,
+          todayActivities: newActivities.filter(a => a.date === todayDate),
+        });
+      }
+
+      const updated = exchanges.map(e => e.id === exchangeId ? { ...e, status: 'rejected' as const } : e);
+      set({
+        exchanges: updated,
+        pendingExchanges: updated.filter(e => e.status === 'pending'),
+      });
+      notifyChildOfExchangeDecision(user, exchange, 'exchange_rejected');
+    }
+  },
+
+  setExchanges: (exchanges) => set({ exchanges }),
+  setPendingExchanges: (pendingExchanges) => set({ pendingExchanges }),
+
+  // Snackbar
+  showSnackbar: (message, type = 'info') => set({ snackbarMessage: message, snackbarType: type }),
+  hideSnackbar: () => set({ snackbarMessage: null }),
+
   // 알림 목록 로드
   loadNotifications: async () => {
     const { user } = get();
     if (!user) return;
-    const result = await notificationService.getMyNotifications(user.id);
-    if (result.success && result.notifications) {
-      set({ notifications: result.notifications });
+    try {
+      const result = await notificationService.getMyNotifications(user.id);
+      if (result.success && result.notifications) {
+        set({ notifications: result.notifications });
+      } else {
+        get().showSnackbar('알림을 불러오지 못했습니다.', 'error');
+      }
+    } catch {
+      get().showSnackbar('알림을 불러오는 중 오류가 발생했습니다.', 'error');
     }
   },
 
@@ -408,6 +590,91 @@ export const useStore = create<AppState>()((set, get) => ({
       set({ activities: newActivities, todayActivities, pendingApprovals });
     }
   },
+
+  assignPenalty: async (childId, childName, category, description) => {
+    const { user, activities } = get();
+    if (!user) return false;
+
+    const penaltyInfo = PENALTY_ACTIVITIES[category];
+    const todayDate = new Date().toISOString().split('T')[0];
+
+    const penaltyActivity: Omit<Activity, 'id' | 'createdAt'> = {
+      userId: childId,
+      userName: childName,
+      date: todayDate,
+      type: 'penalty',
+      category,
+      duration: penaltyInfo.hours,
+      multiplier: 1,
+      earnedTime: penaltyInfo.hours,
+      description: description || penaltyInfo.description,
+      requiresApproval: false,
+      approved: true,
+    };
+
+    const result = await activityService.addActivity(penaltyActivity);
+    if (result.success && result.activity) {
+      const newActivities = [result.activity, ...activities];
+      const todayActivities = newActivities.filter(a => a.date === todayDate);
+      set({ activities: newActivities, todayActivities });
+
+      // 자녀에게 벌금 알림
+      await notifyChildOfPenalty(user, childId, penaltyInfo.label, penaltyInfo.hours);
+      return true;
+    }
+    return false;
+  },
+
+  editActivity: async (id, updates) => {
+    const { activities } = get();
+
+    const result = await activityService.updateActivity(id, updates);
+    if (result.success && result.activity) {
+      const todayDate = new Date().toISOString().split('T')[0];
+      const newActivities = activities.map(a => a.id === id ? result.activity! : a);
+      const todayActivities = newActivities.filter(a => a.date === todayDate);
+      const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
+      set({ activities: newActivities, todayActivities, pendingApprovals });
+      return true;
+    }
+    return false;
+  },
+
+  updateProfile: async (name) => {
+    const { user } = get();
+    if (!user) return false;
+
+    const result = await authService.updateUserName(name);
+    if (result.success && result.user) {
+      set({ user: result.user });
+      return true;
+    }
+    return false;
+  },
+
+  updateAvatar: async (avatar) => {
+    const { user } = get();
+    if (!user) return false;
+
+    const result = await authService.updateAvatar(avatar);
+    if (result.success && result.user) {
+      set({ user: result.user });
+      return true;
+    }
+    return false;
+  },
+
+  completeExchange: async (exchangeId) => {
+    const { exchanges } = get();
+
+    const result = await exchangeService.completeExchange(exchangeId);
+    if (result.success && result.exchange) {
+      const newExchanges = exchanges.map(e =>
+        e.id === exchangeId ? result.exchange! : e
+      );
+      set({ exchanges: newExchanges });
+    }
+  },
 }));
 
 // 오늘 번 시간 계산
@@ -446,7 +713,10 @@ export const useComputedBalance = () => {
   const penalty = activities
     .filter(a => a.type === 'penalty')
     .reduce((sum, a) => sum + a.earnedTime, 0);
-  return earned - spent - penalty;
+  const exchanged = activities
+    .filter(a => a.type === 'exchange')
+    .reduce((sum, a) => sum + a.duration, 0);
+  return earned - spent - penalty - exchanged;
 };
 
 // 전체 번 시간

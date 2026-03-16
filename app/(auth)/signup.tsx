@@ -226,7 +226,7 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
@@ -242,13 +242,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   errorContainer: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#F0D6D6',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: '#DC2626',
+    color: '#8B3A3A',
     textAlign: 'center',
   },
   sectionTitle: {
@@ -266,14 +266,14 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   roleCardSelected: {
-    borderColor: '#6366F1',
-    backgroundColor: '#EEF2FF',
+    borderColor: '#6B4226',
+    backgroundColor: '#EFEBE9',
   },
   roleLabel: {
     fontWeight: '600',
   },
   roleDescription: {
-    color: '#64748B',
+    color: '#8D6E63',
     fontSize: 12,
     marginLeft: 52,
     marginTop: -8,
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   signupButton: {
     marginTop: 16,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#6B4226',
   },
   buttonContent: {
     paddingVertical: 8,
@@ -296,6 +296,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   loginText: {
-    color: '#64748B',
+    color: '#8D6E63',
   },
 });

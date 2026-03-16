@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { StyleSheet, View, ScrollView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View, ScrollView, RefreshControl } from 'react-native';
 import { Text, Surface, Button, IconButton } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useStore } from '@/store/useStore';
@@ -25,7 +25,15 @@ export default function NotificationsScreen() {
   const markNotificationRead = useStore((state) => state.markNotificationRead);
   const markAllNotificationsRead = useStore((state) => state.markAllNotificationsRead);
   const loadNotifications = useStore((state) => state.loadNotifications);
+  const loadUnreadCount = useStore((state) => state.loadUnreadCount);
   const user = useStore((state) => state.user);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([loadNotifications(), loadUnreadCount()]);
+    setRefreshing(false);
+  }, [loadNotifications, loadUnreadCount]);
 
   const handlePress = useCallback(async (notification: AppNotification) => {
     if (!notification.isRead) {
@@ -34,6 +42,10 @@ export default function NotificationsScreen() {
     // 알림 타입에 따라 이동
     if (notification.type === 'approval_request') {
       router.push('/approve');
+    } else if (notification.type === 'exchange_request') {
+      router.push('/(tabs)/exchange');
+    } else if (notification.type === 'penalty') {
+      router.push('/history');
     } else {
       router.push('/history');
     }
@@ -48,16 +60,24 @@ export default function NotificationsScreen() {
       case 'approval_request': return 'clock-outline';
       case 'approved': return 'check-circle-outline';
       case 'rejected': return 'close-circle-outline';
+      case 'penalty': return 'alert-circle-outline';
+      case 'exchange_request': return 'cash';
+      case 'exchange_approved': return 'cash-check';
+      case 'exchange_rejected': return 'cash-remove';
       default: return 'bell-outline';
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'approval_request': return '#6366F1';
-      case 'approved': return '#059669';
-      case 'rejected': return '#DC2626';
-      default: return '#64748B';
+      case 'approval_request': return '#6B4226';
+      case 'approved': return '#4A6B2E';
+      case 'rejected': return '#6D2B2B';
+      case 'penalty': return '#B91C1C';
+      case 'exchange_request': return '#A67B4B';
+      case 'exchange_approved': return '#4A6B2E';
+      case 'exchange_rejected': return '#6D2B2B';
+      default: return '#8D6E63';
     }
   };
 
@@ -86,7 +106,10 @@ export default function NotificationsScreen() {
       </View>
 
       {/* 알림 목록 */}
-      <ScrollView style={styles.list}>
+      <ScrollView
+        style={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6B4226']} />}
+      >
         {notifications.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>알림이 없습니다</Text>
@@ -147,7 +170,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
@@ -164,10 +187,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#3E2723',
   },
   unreadBadge: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#8B3A3A',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -179,7 +202,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   markAllReadLabel: {
-    color: '#6366F1',
+    color: '#6B4226',
     fontSize: 13,
   },
   list: {
@@ -192,7 +215,7 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   emptyText: {
-    color: '#94A3B8',
+    color: '#A1887F',
     fontSize: 16,
   },
   notificationItem: {
@@ -232,22 +255,22 @@ const styles = StyleSheet.create({
   },
   notificationTitle: {
     fontWeight: '500',
-    color: '#334155',
+    color: '#4E342E',
   },
   unreadTitle: {
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#3E2723',
   },
   timeText: {
-    color: '#94A3B8',
+    color: '#A1887F',
     fontSize: 11,
   },
   bodyText: {
-    color: '#64748B',
+    color: '#8D6E63',
     lineHeight: 18,
   },
   senderText: {
-    color: '#6366F1',
+    color: '#6B4226',
     fontSize: 11,
     marginTop: 4,
   },
@@ -255,7 +278,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#6B4226',
     marginTop: 4,
     marginLeft: 8,
   },

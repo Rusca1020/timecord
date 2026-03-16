@@ -191,10 +191,17 @@ export async function deleteActivity(activityId: string): Promise<{ success: boo
 // 활동 업데이트
 export async function updateActivity(activityId: string, updates: Partial<Activity>): Promise<{ success: boolean; activity?: Activity; error?: string }> {
   try {
-    const dbUpdates: Record<string, boolean | string | Date | null> = {};
+    const dbUpdates: Record<string, unknown> = {};
     if (updates.approved !== undefined) dbUpdates.approved = updates.approved;
     if (updates.approvedBy !== undefined) dbUpdates.approved_by = updates.approvedBy;
     if (updates.approvedAt !== undefined) dbUpdates.approved_at = updates.approvedAt instanceof Date ? updates.approvedAt.toISOString() : updates.approvedAt;
+    if (updates.duration !== undefined) dbUpdates.duration = updates.duration;
+    if (updates.multiplier !== undefined) dbUpdates.multiplier = updates.multiplier;
+    if (updates.earnedTime !== undefined) dbUpdates.earned_time = updates.earnedTime;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.startTime !== undefined) dbUpdates.start_time = updates.startTime;
+    if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
 
     const { data, error } = await supabase
       .from('activities')
@@ -242,4 +249,35 @@ export function subscribeToActivities(
   return () => {
     subscription.unsubscribe();
   };
+}
+
+// 실시간 구독 (부모용 - 자녀들)
+export function subscribeToChildrenActivities(
+  childIds: string[],
+  callback: (activities: Activity[]) => void
+): () => void {
+  if (childIds.length === 0) return () => {};
+
+  const channels = childIds.map(childId =>
+    supabase
+      .channel(`activities-parent-${childId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'activities',
+          filter: `user_id=eq.${childId}`,
+        },
+        async () => {
+          const result = await getChildrenActivities(childIds);
+          if (result.success && result.activities) {
+            callback(result.activities);
+          }
+        }
+      )
+      .subscribe()
+  );
+
+  return () => { channels.forEach(ch => ch.unsubscribe()); };
 }

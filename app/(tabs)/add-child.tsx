@@ -196,7 +196,7 @@ export default function AddChildScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
@@ -212,30 +212,30 @@ const styles = StyleSheet.create({
   },
   description: {
     textAlign: 'center',
-    color: '#64748B',
+    color: '#8D6E63',
     marginBottom: 24,
   },
   errorContainer: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#F0D6D6',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: '#DC2626',
+    color: '#8B3A3A',
     textAlign: 'center',
   },
   input: {
     marginBottom: 8,
   },
   hint: {
-    color: '#94A3B8',
+    color: '#A1887F',
     marginTop: 8,
     marginBottom: 16,
   },
   createButton: {
     marginTop: 8,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#6B4226',
   },
   cancelButton: {
     marginTop: 12,
