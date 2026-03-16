@@ -48,6 +48,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  emailVerified: boolean;    // 이메일 인증 완료 여부
   avatar?: string;           // 프로필 아바타 이모지
   parentId?: string;        // 자녀인 경우 연결된 부모 ID
   children?: ChildInfo[];   // 부모인 경우 자녀 정보 목록

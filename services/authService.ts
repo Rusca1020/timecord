@@ -7,6 +7,7 @@ export interface AuthResult {
   success: boolean;
   user?: User;
   error?: string;
+  needsVerification?: boolean;
 }
 
 // Supabase User를 앱 User 타입으로 변환
@@ -17,6 +18,7 @@ function mapSupabaseUser(supabaseUser: SupabaseUser): User {
     name: metadata.name || supabaseUser.email?.split('@')[0] || 'User',
     email: supabaseUser.email || '',
     role: (metadata.role as UserRole) || 'child',
+    emailVerified: !!supabaseUser.email_confirmed_at,
     avatar: metadata.avatar as string | undefined,
     parentId: metadata.parentId,
     children: (metadata.children as ChildInfo[]) || [],
@@ -59,6 +61,15 @@ export async function signUp(formData: SignupFormData): Promise<AuthResult> {
       name: formData.name,
       role: formData.role,
     });
+
+    // 이메일 확인이 필요한 경우 (세션이 없으면 이메일 확인 대기 상태)
+    if (!data.session) {
+      return {
+        success: true,
+        user: mapSupabaseUser(data.user),
+        needsVerification: true,
+      };
+    }
 
     return {
       success: true,
@@ -234,6 +245,46 @@ export async function resetPassword(email: string): Promise<{ success: boolean; 
     return {
       success: false,
       error: err instanceof Error ? err.message : '비밀번호 재설정 이메일 전송에 실패했습니다.',
+    };
+  }
+}
+
+// 인증 메일 재전송
+export async function resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : '인증 메일 재전송에 실패했습니다.',
+    };
+  }
+}
+
+// 이메일 인증 상태 확인
+export async function checkEmailVerification(): Promise<{ verified: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error) {
+      return { verified: false, error: error.message };
+    }
+
+    if (!data.user) {
+      return { verified: false, error: '사용자 정보를 찾을 수 없습니다.' };
+    }
+
+    return { verified: !!data.user.email_confirmed_at };
+  } catch (err) {
+    return {
+      verified: false,
+      error: err instanceof Error ? err.message : '인증 상태 확인에 실패했습니다.',
     };
   }
 }

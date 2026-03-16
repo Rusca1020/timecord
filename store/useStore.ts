@@ -17,6 +17,7 @@ interface AppState {
   isAuthenticated: boolean;
   isLoading: boolean;
   authError: string | null;
+  pendingVerificationEmail: string | null;
 
   // 활동 기록
   activities: Activity[];
@@ -47,6 +48,7 @@ interface AppState {
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   initializeAuth: () => Promise<void>;
+  clearPendingVerification: () => void;
 
   // 연결 동기화
   syncConnections: () => Promise<void>;
@@ -103,6 +105,7 @@ const initialState = {
   isAuthenticated: false,
   isLoading: true,
   authError: null,
+  pendingVerificationEmail: null as string | null,
   activities: [],
   todayActivities: [],
   pendingApprovals: [],
@@ -136,7 +139,14 @@ export const useStore = create<AppState>()((set, get) => ({
 
     const result = await authService.signUp(formData);
 
-    if (result.success && result.user) {
+    if (result.success && result.needsVerification) {
+      // 이메일 인증 대기 상태
+      set({
+        isAuthenticated: false,
+        pendingVerificationEmail: formData.email,
+        isLoading: false,
+      });
+    } else if (result.success && result.user) {
       set({ user: result.user, isAuthenticated: true, isLoading: false });
     } else {
       set({ authError: result.error || '회원가입에 실패했습니다.', isLoading: false });
@@ -150,6 +160,16 @@ export const useStore = create<AppState>()((set, get) => ({
     const result = await authService.signIn(email, password);
 
     if (result.success && result.user) {
+      if (!result.user.emailVerified) {
+        // 이메일 미인증 상태 → 인증 대기 화면으로
+        set({
+          isAuthenticated: false,
+          pendingVerificationEmail: result.user.email,
+          isLoading: false,
+          authError: '이메일 인증을 먼저 완료해주세요.',
+        });
+        return;
+      }
       set({ user: result.user, isAuthenticated: true, isLoading: false });
       // 로그인 후 연결 동기화 + 활동 데이터 + 알림 + 교환 로드
       await get().syncConnections();
@@ -172,6 +192,16 @@ export const useStore = create<AppState>()((set, get) => ({
     const user = await authService.getCurrentUser();
 
     if (user) {
+      if (!user.emailVerified) {
+        // 이메일 미인증 상태
+        set({
+          user: null,
+          isAuthenticated: false,
+          pendingVerificationEmail: user.email,
+          isLoading: false,
+        });
+        return;
+      }
       set({ user, isAuthenticated: true, isLoading: false });
       // 세션 복원 후 연결 동기화 + 활동 데이터 + 알림 + 교환 로드
       await get().syncConnections();
@@ -187,6 +217,11 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
+  // 이메일 인증 대기 상태 초기화
+  clearPendingVerification: () => {
+    set({ pendingVerificationEmail: null, authError: null });
+  },
+
   // 로그아웃
   logout: async () => {
     await authService.signOut();
@@ -195,6 +230,7 @@ export const useStore = create<AppState>()((set, get) => ({
       isAuthenticated: false,
       isLoading: false,
       authError: null,
+      pendingVerificationEmail: null,
       activities: [],
       todayActivities: [],
       pendingApprovals: [],

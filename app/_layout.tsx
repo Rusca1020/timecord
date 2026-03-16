@@ -58,24 +58,30 @@ const theme = {
 
 SplashScreen.preventAutoHideAsync();
 
-// 인증 상태 기반 라우트 보호 훅
+// 인증 상태 기반 라우트 보호 훅 (3단계: 미인증 / 이메일 미확인 / 인증 완료)
 function useProtectedRoute(isAuthenticated: boolean, isLoading: boolean) {
   const segments = useSegments();
   const router = useRouter();
+  const pendingVerificationEmail = useStore((state) => state.pendingVerificationEmail);
 
   useEffect(() => {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // 인증되지 않은 상태에서 보호된 라우트 접근 시 로그인으로 리다이렉트
+    if (!isAuthenticated && pendingVerificationEmail) {
+      // 이메일 인증 대기 상태 → verify-email 화면으로
+      if (segments[1] !== 'verify-email') {
+        router.replace('/(auth)/verify-email');
+      }
+    } else if (!isAuthenticated && !inAuthGroup) {
+      // 미인증 상태 → 로그인으로 리다이렉트
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
-      // 인증된 상태에서 auth 라우트 접근 시 메인으로 리다이렉트
+      // 인증 완료 상태 → 메인으로 리다이렉트
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, segments, pendingVerificationEmail]);
 }
 
 export default function RootLayout() {

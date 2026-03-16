@@ -28,6 +28,13 @@ export default function AuthLayout() {
           title: '회원가입',
         }}
       />
+      <Stack.Screen
+        name="verify-email"
+        options={{
+          title: '이메일 인증',
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }
