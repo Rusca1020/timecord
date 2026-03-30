@@ -36,8 +36,8 @@ jobs:
       - name: Build web export
         run: npx expo export --platform web
         env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SUPABASE_URL: https://lpzclpigkbaovzefskwa.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwemNscGlna2Jhb3Z6ZWZza3dhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMDQ3ODIsImV4cCI6MjA4Mzc4MDc4Mn0.3apGIxuGWYF1AWfC7y3lG4JCfpjQciGft5YqhJCqAos
 
       - name: Create 404.html for SPA routing
         run: cp dist/index.html dist/404.html
