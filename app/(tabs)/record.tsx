@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, Alert } from 'react-native';
-import { Card, Text, Button, TextInput, SegmentedButtons, Chip, Portal, Dialog } from 'react-native-paper';
+import { StyleSheet, View, ScrollView, Alert, Pressable } from 'react-native';
+import { Card, Text, Button, TextInput, SegmentedButtons, Chip, Portal, Dialog, RadioButton } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
 import { useStore } from '@/store/useStore';
 import { EARN_ACTIVITIES, SPEND_ACTIVITIES, NEUTRAL_ACTIVITIES } from '@/constants/activities';
-import { EarnCategory, SpendCategory, NeutralCategory, Activity } from '@/types';
+import { EarnCategory, SpendCategory, NeutralCategory, CustomActivity, ApproverType } from '@/types';
 
 type RecordType = 'earn' | 'spend' | 'neutral';
 
@@ -44,6 +44,13 @@ export default function RecordScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isAutoCalculated, setIsAutoCalculated] = useState(false);
 
+  // 커스텀 활동 추가 다이얼로그
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [newMultiplier, setNewMultiplier] = useState('1');
+  const [newRequiresApproval, setNewRequiresApproval] = useState(false);
+  const [newApproverType, setNewApproverType] = useState<ApproverType>('mom');
+
   // URL 파라미터로 탭 전환
   useEffect(() => {
     if (type === 'earn' || type === 'spend' || type === 'neutral') {
@@ -67,13 +74,48 @@ export default function RecordScreen() {
 
   const user = useStore((state) => state.user);
   const addActivity = useStore((state) => state.addActivity);
+  const customActivities = useStore((state) => state.customActivities);
+  const addCustomActivity = useStore((state) => state.addCustomActivity);
+  const removeCustomActivity = useStore((state) => state.removeCustomActivity);
 
   const earnCategories = Object.entries(EARN_ACTIVITIES);
   const spendCategories = Object.entries(SPEND_ACTIVITIES);
   const neutralCategories = Object.entries(NEUTRAL_ACTIVITIES);
 
-  const getSelectedActivity = () => {
+  // 현재 탭에 해당하는 커스텀 활동 필터
+  const customForType = customActivities.filter(a => a.type === recordType);
+
+  // 선택된 카테고리가 커스텀 활동인지 확인
+  const getCustomActivity = (categoryId: string): CustomActivity | undefined => {
+    return customActivities.find(a => `custom_${a.id}` === categoryId);
+  };
+
+  const isCustomCategory = (categoryId: string | null): boolean => {
+    return !!categoryId && categoryId.startsWith('custom_');
+  };
+
+  const getSelectedActivity = (): {
+    label: string;
+    description: string;
+    multiplier?: number;
+    fixedHours?: number;
+    requiresApproval?: boolean;
+    approverType?: ApproverType;
+  } | null => {
     if (!selectedCategory) return null;
+
+    // 커스텀 활동인 경우
+    const custom = getCustomActivity(selectedCategory);
+    if (custom) {
+      return {
+        label: custom.label,
+        multiplier: custom.multiplier,
+        requiresApproval: custom.requiresApproval,
+        approverType: custom.approverType,
+        description: custom.description,
+      };
+    }
+
     if (recordType === 'earn') {
       return EARN_ACTIVITIES[selectedCategory as EarnCategory];
     } else if (recordType === 'spend') {
@@ -85,7 +127,15 @@ export default function RecordScreen() {
 
   const calculateEarnedTime = () => {
     if (recordType !== 'earn' || !selectedCategory) return 0;
+
+    // 커스텀 활동
+    const custom = getCustomActivity(selectedCategory);
+    if (custom) {
+      return parseFloat(duration || '0') * custom.multiplier;
+    }
+
     const activity = EARN_ACTIVITIES[selectedCategory as EarnCategory];
+    if (!activity) return 0;
     if (activity.fixedHours) {
       return activity.fixedHours;
     }
@@ -97,7 +147,10 @@ export default function RecordScreen() {
       Alert.alert('알림', '활동을 선택해주세요.');
       return;
     }
-    if (recordType !== 'neutral' && !duration && !(recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.fixedHours)) {
+    const isFixedHours = !isCustomCategory(selectedCategory) &&
+      recordType === 'earn' &&
+      EARN_ACTIVITIES[selectedCategory as EarnCategory]?.fixedHours;
+    if (recordType !== 'neutral' && !duration && !isFixedHours) {
       Alert.alert('알림', '시간을 입력해주세요.');
       return;
     }
@@ -115,8 +168,22 @@ export default function RecordScreen() {
         ? -parseFloat(duration || '0')  // spend는 음수 (시간 소비)
         : 0;  // neutral은 0 (시간 영향 없음)
 
-    const requiresApproval = recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.requiresApproval;
+    const custom = getCustomActivity(selectedCategory!);
+    const requiresApproval = custom
+      ? custom.requiresApproval
+      : recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.requiresApproval;
     const approved = recordType === 'earn' ? !requiresApproval : true;
+
+    const multiplier = custom
+      ? custom.multiplier
+      : recordType === 'earn' ? (EARN_ACTIVITIES[selectedCategory as EarnCategory]?.multiplier || 1) : 1;
+
+    const approverType = custom
+      ? custom.approverType
+      : recordType === 'earn' ? EARN_ACTIVITIES[selectedCategory as EarnCategory]?.approverType : null;
+
+    // category: 커스텀이면 custom_{id} 형태로 저장
+    const category = selectedCategory!;
 
     // id와 createdAt은 DB에서 자동 생성
     const newActivity = {
@@ -124,16 +191,16 @@ export default function RecordScreen() {
       userName: user?.name || '',
       date: now.toISOString().split('T')[0],
       type: recordType,
-      category: selectedCategory as EarnCategory | SpendCategory | NeutralCategory,
+      category,
       duration: parseFloat(duration || '0'),
-      multiplier: recordType === 'earn' ? (EARN_ACTIVITIES[selectedCategory as EarnCategory]?.multiplier || 1) : 1,
-      earnedTime: earnedTime,
+      multiplier,
+      earnedTime,
       startTime: startTime || undefined,
       endTime: endTime || undefined,
       description: description || undefined,
       requiresApproval: requiresApproval || false,
-      approverType: recordType === 'earn' ? EARN_ACTIVITIES[selectedCategory as EarnCategory]?.approverType : null,
-      approved: approved,
+      approverType,
+      approved,
     };
 
     const success = await addActivity(newActivity);
@@ -182,6 +249,71 @@ export default function RecordScreen() {
     setEndTimeError('');
     setDescription('');
   };
+
+  // 커스텀 활동 추가 다이얼로그 리셋
+  const resetAddDialog = () => {
+    setNewLabel('');
+    setNewMultiplier('1');
+    setNewRequiresApproval(false);
+    setNewApproverType('mom');
+    setShowAddDialog(false);
+  };
+
+  const handleAddCustomActivity = async () => {
+    if (!newLabel.trim()) {
+      Alert.alert('알림', '활동 이름을 입력해주세요.');
+      return;
+    }
+
+    const success = await addCustomActivity({
+      type: recordType,
+      label: newLabel.trim(),
+      multiplier: recordType === 'earn' ? parseFloat(newMultiplier) : 1,
+      requiresApproval: recordType === 'earn' ? newRequiresApproval : false,
+      approverType: recordType === 'earn' && newRequiresApproval ? newApproverType : null,
+      description: '',
+    });
+
+    if (success) {
+      resetAddDialog();
+    } else {
+      Alert.alert('오류', '활동 추가에 실패했습니다.');
+    }
+  };
+
+  const handleDeleteCustomActivity = (custom: CustomActivity) => {
+    Alert.alert(
+      '삭제 확인',
+      `"${custom.label}" 활동을 삭제하시겠습니까?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await removeCustomActivity(custom.id);
+            if (success) {
+              if (selectedCategory === `custom_${custom.id}`) {
+                setSelectedCategory(null);
+              }
+            } else {
+              Alert.alert('오류', '삭제에 실패했습니다.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // 현재 선택에 fixedHours가 있는지 (커스텀은 fixedHours 없음)
+  const hasFixedHours = !isCustomCategory(selectedCategory) &&
+    recordType === 'earn' &&
+    selectedCategory &&
+    EARN_ACTIVITIES[selectedCategory as EarnCategory]?.fixedHours;
+
+  // 선택된 활동의 승인 정보 표시
+  const selectedActivity = getSelectedActivity();
+  const selectedCustom = selectedCategory ? getCustomActivity(selectedCategory) : undefined;
 
   return (
     <ScrollView style={styles.container}>
@@ -251,20 +383,61 @@ export default function RecordScreen() {
                 {activity.label}
               </Chip>
             ))}
+
+            {/* 커스텀 활동 Chip */}
+            {customForType.map((custom) => {
+              const chipKey = `custom_${custom.id}`;
+              const isSelected = selectedCategory === chipKey;
+              const selectedStyle = recordType === 'earn'
+                ? styles.chipSelected
+                : recordType === 'spend'
+                  ? styles.chipSelectedSpend
+                  : styles.chipSelectedNeutral;
+              return (
+                <Pressable
+                  key={chipKey}
+                  onLongPress={() => handleDeleteCustomActivity(custom)}
+                >
+                  <Chip
+                    selected={isSelected}
+                    onPress={() => setSelectedCategory(chipKey)}
+                    style={[
+                      styles.chip,
+                      styles.customChip,
+                      isSelected && selectedStyle,
+                    ]}
+                    textStyle={isSelected ? styles.chipTextSelected : {}}
+                  >
+                    {custom.label}
+                    {recordType === 'earn' && custom.multiplier > 1 && ` (${custom.multiplier}배)`}
+                  </Chip>
+                </Pressable>
+              );
+            })}
+
+            {/* + 추가 Chip */}
+            <Chip
+              icon="plus"
+              onPress={() => setShowAddDialog(true)}
+              style={[styles.chip, styles.addChip]}
+              textStyle={styles.addChipText}
+            >
+              추가
+            </Chip>
           </View>
         </Card.Content>
       </Card>
 
       {/* 선택된 활동 설명 */}
-      {selectedCategory && getSelectedActivity() && (
+      {selectedCategory && selectedActivity && (
         <Card style={styles.infoCard}>
           <Card.Content>
             <Text variant="bodyMedium" style={styles.infoText}>
-              {getSelectedActivity()?.description}
+              {selectedActivity.description || selectedActivity.label}
             </Text>
-            {recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.requiresApproval && (
+            {recordType === 'earn' && selectedActivity.requiresApproval && (
               <Text variant="bodySmall" style={styles.approvalText}>
-                {EARN_ACTIVITIES[selectedCategory as EarnCategory]?.approverType === 'mom' ? '엄마' : '아빠'} 승인 필요
+                {selectedActivity.approverType === 'mom' ? '엄마' : '아빠'} 승인 필요
               </Text>
             )}
           </Card.Content>
@@ -272,7 +445,7 @@ export default function RecordScreen() {
       )}
 
       {/* 시간 입력 */}
-      {recordType !== 'neutral' && !(recordType === 'earn' && EARN_ACTIVITIES[selectedCategory as EarnCategory]?.fixedHours) && (
+      {recordType !== 'neutral' && !hasFixedHours && (
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -397,6 +570,60 @@ export default function RecordScreen() {
             <Button onPress={confirmSubmit}>확인</Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* 커스텀 활동 추가 다이얼로그 */}
+        <Dialog visible={showAddDialog} onDismiss={resetAddDialog}>
+          <Dialog.Title>활동 추가</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              mode="outlined"
+              label="활동 이름"
+              value={newLabel}
+              onChangeText={setNewLabel}
+              style={{ marginBottom: 12 }}
+            />
+            {recordType === 'earn' && (
+              <>
+                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>배수 선택</Text>
+                <RadioButton.Group onValueChange={setNewMultiplier} value={newMultiplier}>
+                  <View style={styles.radioRow}>
+                    <RadioButton.Item label="1배" value="1" style={styles.radioItem} />
+                    <RadioButton.Item label="1.5배" value="1.5" style={styles.radioItem} />
+                    <RadioButton.Item label="2배" value="2" style={styles.radioItem} />
+                  </View>
+                </RadioButton.Group>
+
+                <View style={styles.approvalRow}>
+                  <Text variant="bodyMedium">승인 필요</Text>
+                  <Button
+                    mode={newRequiresApproval ? 'contained' : 'outlined'}
+                    compact
+                    onPress={() => setNewRequiresApproval(!newRequiresApproval)}
+                    style={{ marginLeft: 8 }}
+                  >
+                    {newRequiresApproval ? '필요' : '불필요'}
+                  </Button>
+                </View>
+
+                {newRequiresApproval && (
+                  <RadioButton.Group
+                    onValueChange={(v) => setNewApproverType(v as ApproverType)}
+                    value={newApproverType || 'mom'}
+                  >
+                    <View style={styles.radioRow}>
+                      <RadioButton.Item label="엄마" value="mom" style={styles.radioItem} />
+                      <RadioButton.Item label="아빠" value="dad" style={styles.radioItem} />
+                    </View>
+                  </RadioButton.Group>
+                )}
+              </>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={resetAddDialog}>취소</Button>
+            <Button onPress={handleAddCustomActivity}>추가</Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </ScrollView>
   );
@@ -449,6 +676,11 @@ const styles = StyleSheet.create({
   chip: {
     marginBottom: 4,
   },
+  customChip: {
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#BCAAA4',
+  },
   chipSelected: {
     backgroundColor: '#5D7B3A',
   },
@@ -460,6 +692,15 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: '#FFFFFF',
+  },
+  addChip: {
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#A1887F',
+    backgroundColor: 'transparent',
+  },
+  addChipText: {
+    color: '#8D6E63',
   },
   input: {
     marginBottom: 12,
@@ -518,5 +759,18 @@ const styles = StyleSheet.create({
   submitButtonLabel: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  radioRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  radioItem: {
+    paddingHorizontal: 0,
+  },
+  approvalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8,
   },
 });

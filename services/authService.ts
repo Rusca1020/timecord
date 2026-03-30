@@ -99,6 +99,15 @@ export async function signIn(email: string, password: string): Promise<AuthResul
       return { success: false, error: '로그인에 실패했습니다.' };
     }
 
+    // 로그인 시 profiles 테이블에 프로필 보장 (회원가입 시 이메일 인증 전이라 실패했을 수 있음)
+    const metadata = data.user.user_metadata || {};
+    await upsertProfile({
+      id: data.user.id,
+      email: data.user.email || email,
+      name: metadata.name || data.user.email?.split('@')[0] || 'User',
+      role: metadata.role || 'child',
+    });
+
     return {
       success: true,
       user: mapSupabaseUser(data.user),

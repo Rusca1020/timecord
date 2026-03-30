@@ -1,10 +1,16 @@
 import React from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
-import { Card, Text, Chip, List, Divider } from 'react-native-paper';
+import { Card, Text, Chip, Divider } from 'react-native-paper';
 import { EARN_ACTIVITIES, SPEND_ACTIVITIES, PENALTY_ACTIVITIES, NEUTRAL_ACTIVITIES, EXCHANGE_RATE } from '@/constants/activities';
 import { EarnCategory, SpendCategory, PenaltyCategory, NeutralCategory } from '@/types';
+import { useStore } from '@/store/useStore';
 
 export default function RulesScreen() {
+  const customActivities = useStore((state) => state.customActivities);
+  const customEarn = customActivities.filter(a => a.type === 'earn');
+  const customSpend = customActivities.filter(a => a.type === 'spend');
+  const customNeutral = customActivities.filter(a => a.type === 'neutral');
+
   return (
     <ScrollView style={styles.container}>
       {/* 교환 비율 */}
@@ -53,6 +59,30 @@ export default function RulesScreen() {
               </View>
             </View>
           ))}
+          {customEarn.map((custom, idx) => (
+            <View key={custom.id}>
+              <Divider style={styles.divider} />
+              <View style={styles.ruleRow}>
+                <View style={styles.ruleLeft}>
+                  <View style={styles.customLabelRow}>
+                    <Text style={styles.ruleLabel}>{custom.label}</Text>
+                    <Text style={styles.customBadge}>커스텀</Text>
+                  </View>
+                  {custom.description ? <Text style={styles.ruleDesc}>{custom.description}</Text> : null}
+                </View>
+                <View style={styles.ruleRight}>
+                  <Chip compact style={styles.earnChip} textStyle={styles.earnChipText}>
+                    x{custom.multiplier}배
+                  </Chip>
+                  {custom.requiresApproval && (
+                    <Chip compact style={custom.approverType === 'mom' ? styles.momChip : styles.dadChip} textStyle={styles.approverText}>
+                      {custom.approverType === 'mom' ? '엄마 확인' : '아빠 확인'}
+                    </Chip>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))}
         </Card.Content>
       </Card>
 
@@ -67,6 +97,21 @@ export default function RulesScreen() {
                 <View style={styles.ruleLeft}>
                   <Text style={styles.ruleLabel}>{info.label}</Text>
                   <Text style={styles.ruleDesc}>{info.description}</Text>
+                </View>
+                <Chip compact style={styles.spendChip} textStyle={styles.spendChipText}>1:1 차감</Chip>
+              </View>
+            </View>
+          ))}
+          {customSpend.map((custom) => (
+            <View key={custom.id}>
+              <Divider style={styles.divider} />
+              <View style={styles.ruleRow}>
+                <View style={styles.ruleLeft}>
+                  <View style={styles.customLabelRow}>
+                    <Text style={styles.ruleLabel}>{custom.label}</Text>
+                    <Text style={styles.customBadge}>커스텀</Text>
+                  </View>
+                  {custom.description ? <Text style={styles.ruleDesc}>{custom.description}</Text> : null}
                 </View>
                 <Chip compact style={styles.spendChip} textStyle={styles.spendChipText}>1:1 차감</Chip>
               </View>
@@ -111,6 +156,21 @@ export default function RulesScreen() {
               </View>
             </View>
           ))}
+          {customNeutral.map((custom) => (
+            <View key={custom.id}>
+              <Divider style={styles.divider} />
+              <View style={styles.ruleRow}>
+                <View style={styles.ruleLeft}>
+                  <View style={styles.customLabelRow}>
+                    <Text style={styles.ruleLabel}>{custom.label}</Text>
+                    <Text style={styles.customBadge}>커스텀</Text>
+                  </View>
+                  {custom.description ? <Text style={styles.ruleDesc}>{custom.description}</Text> : null}
+                </View>
+                <Chip compact style={styles.neutralChip} textStyle={styles.neutralChipText}>0h</Chip>
+              </View>
+            </View>
+          ))}
         </Card.Content>
       </Card>
 
@@ -144,4 +204,6 @@ const styles = StyleSheet.create({
   dadChip: { backgroundColor: '#EFEBE9' },
   approverText: { fontSize: 11 },
   neutralNote: { color: '#A1887F', fontSize: 13, marginBottom: 8 },
+  customLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  customBadge: { fontSize: 10, color: '#A1887F', backgroundColor: '#F5F5F5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
 });

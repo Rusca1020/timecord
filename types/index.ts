@@ -58,6 +58,19 @@ export interface User {
   createdAt: Date;
 }
 
+// 커스텀 활동
+export interface CustomActivity {
+  id: string;
+  userId: string;
+  type: 'earn' | 'spend' | 'neutral';
+  label: string;
+  multiplier: number;
+  requiresApproval: boolean;
+  approverType: ApproverType;
+  description: string;
+  createdAt: Date;
+}
+
 // 활동 기록
 export interface Activity {
   id: string;
@@ -65,7 +78,7 @@ export interface Activity {
   userName?: string;        // 사용자 이름 (부모 내역 조회용)
   date: string;             // YYYY-MM-DD 형식
   type: ActivityType;
-  category: EarnCategory | SpendCategory | PenaltyCategory | NeutralCategory;
+  category: EarnCategory | SpendCategory | PenaltyCategory | NeutralCategory | string;
   duration: number;         // 입력 시간 (시간 단위)
   multiplier: number;       // 배수
   earnedTime: number;       // 실제 반영 시간 (duration * multiplier)

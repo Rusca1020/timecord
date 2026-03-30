@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import { User, Activity, Exchange, AppNotification, SignupFormData, PenaltyCategory } from '@/types';
+import { User, Activity, Exchange, AppNotification, SignupFormData, PenaltyCategory, CustomActivity, ApproverType } from '@/types';
 import * as authService from '@/services/authService';
 import * as activityService from '@/services/activityService';
 import * as connectionService from '@/services/connectionService';
 import * as notificationService from '@/services/notificationService';
 import * as exchangeService from '@/services/exchangeService';
+import * as customActivityService from '@/services/customActivityService';
 import { notifyParentsOfNewActivity, notifyChildOfDecision, notifyChildOfPenalty, notifyParentsOfExchange, notifyChildOfExchangeDecision } from '@/services/notificationHelpers';
 import { EXCHANGE_RATE, PENALTY_ACTIVITIES } from '@/constants/activities';
 
@@ -33,6 +34,9 @@ interface AppState {
   // 교환
   exchanges: Exchange[];
   pendingExchanges: Exchange[];
+
+  // 커스텀 활동
+  customActivities: CustomActivity[];
 
   // Snackbar
   snackbarMessage: string | null;
@@ -95,6 +99,18 @@ interface AppState {
   setExchanges: (exchanges: Exchange[]) => void;
   setPendingExchanges: (exchanges: Exchange[]) => void;
 
+  // 커스텀 활동 액션
+  loadCustomActivities: () => Promise<void>;
+  addCustomActivity: (activity: {
+    type: 'earn' | 'spend' | 'neutral';
+    label: string;
+    multiplier?: number;
+    requiresApproval?: boolean;
+    approverType?: ApproverType;
+    description?: string;
+  }) => Promise<boolean>;
+  removeCustomActivity: (id: string) => Promise<boolean>;
+
   // Snackbar 액션
   showSnackbar: (message: string, type?: SnackbarType) => void;
   hideSnackbar: () => void;
@@ -113,6 +129,7 @@ const initialState = {
   unreadNotificationCount: 0,
   exchanges: [],
   pendingExchanges: [],
+  customActivities: [] as CustomActivity[],
   snackbarMessage: null as string | null,
   snackbarType: 'info' as SnackbarType,
 };
@@ -174,6 +191,7 @@ export const useStore = create<AppState>()((set, get) => ({
       // 로그인 후 연결 동기화 + 활동 데이터 + 알림 + 교환 로드
       await get().syncConnections();
       await get().loadActivities();
+      await get().loadCustomActivities();
       if (get().user?.role === 'parent') {
         await get().loadPendingApprovals();
       }
@@ -206,6 +224,7 @@ export const useStore = create<AppState>()((set, get) => ({
       // 세션 복원 후 연결 동기화 + 활동 데이터 + 알림 + 교환 로드
       await get().syncConnections();
       await get().loadActivities();
+      await get().loadCustomActivities();
       if (get().user?.role === 'parent') {
         await get().loadPendingApprovals();
       }
@@ -238,6 +257,7 @@ export const useStore = create<AppState>()((set, get) => ({
       unreadNotificationCount: 0,
       exchanges: [],
       pendingExchanges: [],
+      customActivities: [],
     });
   },
 
@@ -540,6 +560,50 @@ export const useStore = create<AppState>()((set, get) => ({
 
   setExchanges: (exchanges) => set({ exchanges }),
   setPendingExchanges: (pendingExchanges) => set({ pendingExchanges }),
+
+  // 커스텀 활동 로드
+  loadCustomActivities: async () => {
+    const { user } = get();
+    if (!user) return;
+
+    try {
+      const result = await customActivityService.getCustomActivities(user.id);
+      if (result.success && result.activities) {
+        set({ customActivities: result.activities });
+      }
+    } catch {
+      console.error('Failed to load custom activities');
+    }
+  },
+
+  // 커스텀 활동 추가
+  addCustomActivity: async (activity) => {
+    const { user } = get();
+    if (!user) return false;
+
+    const result = await customActivityService.addCustomActivity({
+      userId: user.id,
+      ...activity,
+    });
+
+    if (result.success && result.activity) {
+      const { customActivities } = get();
+      set({ customActivities: [...customActivities, result.activity] });
+      return true;
+    }
+    return false;
+  },
+
+  // 커스텀 활동 삭제
+  removeCustomActivity: async (id) => {
+    const result = await customActivityService.deleteCustomActivity(id);
+    if (result.success) {
+      const { customActivities } = get();
+      set({ customActivities: customActivities.filter(a => a.id !== id) });
+      return true;
+    }
+    return false;
+  },
 
   // Snackbar
   showSnackbar: (message, type = 'info') => set({ snackbarMessage: message, snackbarType: type }),
