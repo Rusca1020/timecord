@@ -9,6 +9,12 @@ import * as customActivityService from '@/services/customActivityService';
 import { notifyParentsOfNewActivity, notifyChildOfDecision, notifyChildOfPenalty, notifyParentsOfExchange, notifyChildOfExchangeDecision } from '@/services/notificationHelpers';
 import { EXCHANGE_RATE, PENALTY_ACTIVITIES } from '@/constants/activities';
 
+// 로컬 날짜 문자열 (YYYY-MM-DD) — UTC 대신 로컬 타임존 사용
+function getLocalDateString(date?: Date): string {
+  const d = date || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Snackbar 타입
 type SnackbarType = 'error' | 'success' | 'info';
 
@@ -297,7 +303,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const { user } = get();
     if (!user) return;
 
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = getLocalDateString();
 
     try {
       if (user.role === 'child') {
@@ -340,7 +346,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const result = await activityService.addActivity(activity);
     if (result.success && result.activity) {
       const { activities, user } = get();
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const newActivities = [result.activity, ...activities];
       const todayActivities = newActivities.filter(a => a.date === todayDate);
       const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
@@ -361,7 +367,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const result = await activityService.updateActivity(id, updates);
     if (result.success && result.activity) {
       const { activities } = get();
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const newActivities = activities.map(a => a.id === id ? result.activity! : a);
       const todayActivities = newActivities.filter(a => a.date === todayDate);
       const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
@@ -374,7 +380,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const result = await activityService.deleteActivity(id);
     if (result.success) {
       const { activities } = get();
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const newActivities = activities.filter(a => a.id !== id);
       const todayActivities = newActivities.filter(a => a.date === todayDate);
       const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
@@ -392,7 +398,7 @@ export const useStore = create<AppState>()((set, get) => ({
 
     const result = await activityService.approveActivity(id, user.id);
     if (result.success && result.activity) {
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const newActivities = activities.map(a => a.id === id ? result.activity! : a);
       const todayActivities = newActivities.filter(a => a.date === todayDate);
       const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
@@ -404,7 +410,7 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   setActivities: (activities) => {
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = getLocalDateString();
     const todayActivities = activities.filter(a => a.date === todayDate);
     set({ activities, todayActivities });
   },
@@ -482,7 +488,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const exchangeActivity: Omit<Activity, 'id' | 'createdAt'> = {
       userId: user.id,
       userName: user.name,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       type: 'exchange',
       category: 'game' as any, // exchange는 카테고리 불필요, placeholder
       duration: hours,
@@ -541,7 +547,7 @@ export const useStore = create<AppState>()((set, get) => ({
       );
       if (exchangeActivity) {
         await activityService.deleteActivity(exchangeActivity.id);
-        const todayDate = new Date().toISOString().split('T')[0];
+        const todayDate = getLocalDateString();
         const newActivities = activities.filter(a => a.id !== exchangeActivity.id);
         set({
           activities: newActivities,
@@ -683,7 +689,7 @@ export const useStore = create<AppState>()((set, get) => ({
     // 활동 삭제
     const result = await activityService.deleteActivity(id);
     if (result.success) {
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const newActivities = activities.filter(a => a.id !== id);
       const todayActivities = newActivities.filter(a => a.date === todayDate);
       const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
@@ -696,7 +702,7 @@ export const useStore = create<AppState>()((set, get) => ({
     if (!user) return false;
 
     const penaltyInfo = PENALTY_ACTIVITIES[category];
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = getLocalDateString();
 
     const penaltyActivity: Omit<Activity, 'id' | 'createdAt'> = {
       userId: childId,
@@ -730,7 +736,7 @@ export const useStore = create<AppState>()((set, get) => ({
 
     const result = await activityService.updateActivity(id, updates);
     if (result.success && result.activity) {
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const newActivities = activities.map(a => a.id === id ? result.activity! : a);
       const todayActivities = newActivities.filter(a => a.date === todayDate);
       const pendingApprovals = newActivities.filter(a => !a.approved && a.requiresApproval);
@@ -777,27 +783,30 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 }));
 
-// 오늘 번 시간 계산
+// 오늘 번 시간 계산 (activities에서 직접 계산 — todayActivities 상태 의존 제거)
 export const useTodayEarned = () => {
-  const todayActivities = useStore(state => state.todayActivities);
-  return todayActivities
-    .filter(a => a.type === 'earn' && a.approved)
+  const activities = useStore(state => state.activities);
+  const today = getLocalDateString();
+  return activities
+    .filter(a => a.date === today && a.type === 'earn' && a.approved)
     .reduce((sum, a) => sum + a.earnedTime, 0);
 };
 
 // 오늘 쓴 시간 계산
 export const useTodaySpent = () => {
-  const todayActivities = useStore(state => state.todayActivities);
-  return todayActivities
-    .filter(a => a.type === 'spend')
+  const activities = useStore(state => state.activities);
+  const today = getLocalDateString();
+  return activities
+    .filter(a => a.date === today && a.type === 'spend')
     .reduce((sum, a) => sum + a.duration, 0);
 };
 
 // 오늘 벌금 계산
 export const useTodayPenalty = () => {
-  const todayActivities = useStore(state => state.todayActivities);
-  return todayActivities
-    .filter(a => a.type === 'penalty')
+  const activities = useStore(state => state.activities);
+  const today = getLocalDateString();
+  return activities
+    .filter(a => a.date === today && a.type === 'penalty')
     .reduce((sum, a) => sum + a.earnedTime, 0);
 };
 

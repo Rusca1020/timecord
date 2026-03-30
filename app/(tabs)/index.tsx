@@ -10,21 +10,29 @@ import { Activity, ChildInfo } from '@/types';
 
 const screenWidth = Dimensions.get('window').width;
 
+// 로컬 날짜 문자열 (YYYY-MM-DD)
+function toLocalDate(date?: Date): string {
+  const d = date || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // 연속 기록일 수 계산
 function getStreak(activities: Activity[]): number {
   if (activities.length === 0) return 0;
   const dates = [...new Set(activities.map(a => a.date))].sort().reverse();
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const today = toLocalDate();
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = toLocalDate(yesterdayDate);
 
   // 오늘 또는 어제 기록이 없으면 스트릭 0
   if (dates[0] !== today && dates[0] !== yesterday) return 0;
 
   let streak = 0;
-  let checkDate = new Date(dates[0]);
+  let checkDate = new Date(dates[0] + 'T12:00:00');
   const dateSet = new Set(dates);
 
-  while (dateSet.has(checkDate.toISOString().split('T')[0])) {
+  while (dateSet.has(toLocalDate(checkDate))) {
     streak++;
     checkDate.setDate(checkDate.getDate() - 1);
   }
@@ -42,7 +50,7 @@ function getWeeklyMiniData(activities: Activity[]) {
   for (let i = 6; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalDate(date);
     labels.push(dayNames[date.getDay()]);
     const dayActs = activities.filter(a => a.date === dateStr);
     earned.push(dayActs.filter(a => a.type === 'earn' && a.approved).reduce((s, a) => s + a.earnedTime, 0));
@@ -60,7 +68,7 @@ function computeChildStats(activities: Activity[], childId: string) {
   const exchanged = childActivities.filter(a => a.type === 'exchange').reduce((s, a) => s + a.duration, 0);
   const pending = childActivities.filter(a => !a.approved && a.requiresApproval).length;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDate();
   const todayActs = childActivities.filter(a => a.date === todayStr);
   const todayEarned = todayActs.filter(a => a.type === 'earn' && a.approved).reduce((s, a) => s + a.earnedTime, 0);
   const todaySpent = todayActs.filter(a => a.type === 'spend').reduce((s, a) => s + a.duration, 0);
@@ -347,7 +355,7 @@ function ParentHomeScreen() {
     let totalBalance = 0;
     let todayEarnedAll = 0;
     let todaySpentAll = 0;
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = toLocalDate();
 
     children.forEach(child => {
       const stats = computeChildStats(activities, child.id);

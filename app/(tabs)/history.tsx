@@ -78,7 +78,11 @@ export default function HistoryScreen() {
     return `${month}/${day} ${dayNames[date.getDay()]}요일`;
   };
 
-  const isToday = (dateStr: string) => dateStr === new Date().toISOString().split('T')[0];
+  const isToday = (dateStr: string) => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return dateStr === todayStr;
+  };
 
   // 수정/삭제 가능 여부
   const canModify = (activity: Activity) => {
