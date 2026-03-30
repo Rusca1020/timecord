@@ -11,7 +11,7 @@ config.resolver = {
   ...config.resolver,
   sourceExts: [...(config.resolver?.sourceExts || []), 'mjs', 'cjs'],
   unstable_enablePackageExports: true,
-  unstable_conditionNames: ['browser', 'require', 'import'],
+  unstable_conditionNames: ['browser', 'require'],
 };
 
 module.exports = config;
